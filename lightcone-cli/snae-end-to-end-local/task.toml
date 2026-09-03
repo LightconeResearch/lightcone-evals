@@ -1,0 +1,33 @@
+schema_version = "1.4"
+
+[task]
+name = "lightcone/snae-end-to-end-local"
+version = "1.0.0"
+description = "The agent must estimate unresolved recipes, classify and run one fitting boundary locally, then independently classify an oversized production boundary without assuming unavailable scheduler support."
+keywords = ["astronomy", "reproducibility", "resource-estimation", "execution-planning", "local-compute", "astra"]
+[[task.authors]]
+name = "dkn16"
+email = "dkn16@foxmail.com"
+
+[metadata]
+category = "natural-science"
+difficulty = "hard"
+source_format = "skillsbench"
+source_path = "/global/u1/d/dkn16/.lightcone/benchmarking-hpc-skills/tasks/snae-end-to-end-local"
+source_commit = "7098bc49ebcb4753fe36b0433ffe2fa3f8ba57b4"
+source_network_mode = "no-network"
+
+[verifier]
+timeout_sec = 420.0
+
+[agent]
+timeout_sec = 1200.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 1800.0
+os = "linux"
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0

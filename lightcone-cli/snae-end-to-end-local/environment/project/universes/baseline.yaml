@@ -1,0 +1,7 @@
+id: baseline
+description: "Default flat-LCDM fit using the conservative error model and low-redshift cut"
+decisions:
+  optimizer: nelder_mead
+  error_model: stat_and_sys
+  redshift_cut: z_min_001
+  bootstrap_scale: production

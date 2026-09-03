@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Auditable Lightcone resource estimate",
+  "type": "object",
+  "required": ["schema_version", "timestamp", "target", "environment", "estimates"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "timestamp": {"type": "string", "minLength": 1},
+    "target": {
+      "type": "object",
+      "required": ["outputs", "universe"],
+      "properties": {
+        "outputs": {
+          "type": "array",
+          "items": {"enum": ["best_fit", "hubble_diagram", "residuals"]},
+          "minItems": 3,
+          "uniqueItems": true
+        },
+        "universe": {"const": "baseline"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": ["kind", "cpus_available", "memory_mb_available", "gpus_available"],
+      "properties": {
+        "kind": {"const": "local"},
+        "cpus_available": {"type": "integer", "minimum": 1},
+        "memory_mb_available": {"type": "number", "exclusiveMinimum": 0},
+        "gpus_available": {"type": "integer", "minimum": 0}
+      }
+    },
+    "estimates": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["output", "basis", "evidence", "model", "safety_factors", "request"],
+        "properties": {
+          "output": {"enum": ["best_fit", "hubble_diagram", "residuals"]},
+          "basis": {"enum": ["measured", "static"]},
+          "evidence": {"type": "array", "minItems": 1},
+          "model": {"type": "string", "minLength": 1},
+          "safety_factors": {
+            "type": "object",
+            "required": ["walltime", "memory"],
+            "properties": {
+              "walltime": {"type": "number", "minimum": 1.5},
+              "memory": {"type": "number", "minimum": 1.25}
+            }
+          },
+          "request": {
+            "type": "object",
+            "required": ["cpus", "memory", "time_limit"],
+            "properties": {
+              "cpus": {"type": "integer", "minimum": 1},
+              "memory": {"type": "string", "minLength": 1},
+              "gpus": {"type": "integer", "minimum": 1},
+              "time_limit": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

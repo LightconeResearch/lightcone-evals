@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lightcone production execution plan",
+  "type": "object",
+  "required": [
+    "output",
+    "universe",
+    "environment",
+    "decision",
+    "limiting_resources",
+    "next_environment",
+    "next_command",
+    "reason"
+  ],
+  "properties": {
+    "output": {"const": "bootstrap_intervals"},
+    "universe": {"const": "baseline"},
+    "environment": {"enum": ["local", "slurm-allocation", "cluster-login"]},
+    "decision": {
+      "enum": ["synchronous", "asynchronous", "estimate-first", "move-to-supported-environment"]
+    },
+    "limiting_resources": {
+      "type": "array",
+      "items": {"enum": ["cpus", "memory", "gpus", "walltime", "lifetime"]},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "next_environment": {
+      "enum": ["current-local-host", "supported-configured-slurm-site", "larger-local-host"]
+    },
+    "next_command": {"type": ["string", "null"]},
+    "reason": {"type": "string", "minLength": 1}
+  }
+}

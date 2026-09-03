@@ -1,0 +1,6 @@
+{
+  "output": "bootstrap_intervals",
+  "universe": "baseline",
+  "must_survive_current_session": true,
+  "execute_now": false
+}
