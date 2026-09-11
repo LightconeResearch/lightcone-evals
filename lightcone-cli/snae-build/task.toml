@@ -1,0 +1,47 @@
+schema_version = "1.4"
+artifacts = []
+
+[task]
+name = "lightcone/snae-build"
+version = "0.1.0"
+description = "Build a seeded ASTRA analysis end to end with lightcone-cli: complete the deliberately incomplete spec, write the recipe scripts, declare dependencies, materialize every output through the engine, and prepare the project for publication."
+keywords = ["astronomy", "lightcone-cli", "astra", "build-from-scratch", "naive-usage", "provenance"]
+[[task.authors]]
+name = "dkn16"
+email = "dkn16@foxmail.com"
+
+[metadata]
+category = "natural-science"
+difficulty = "medium"
+# Ported from lightcone-cli's own PR eval (.github/workflows/eval.yml +
+# evals/prompt.md + evals/tasks/snae at the pinned commit): same seed, same
+# prompt, same gate — now agent-agnostic, oracle-gated, and comparable
+# across the skills axis.
+source_format = "lightcone-cli-eval"
+source_commit = "78059fab1608b033370558cfef3f5d6ffad26084"
+
+[verifier]
+timeout_sec = 600.0
+collect = []
+
+[verifier.env]
+
+[agent]
+# The upstream eval gives Claude Code 15 minutes / 200 turns; other harnesses
+# are slower, and this must still fit the bench's 60-minute job with the
+# image build.
+timeout_sec = 1800.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 1800.0
+os = "linux"
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]

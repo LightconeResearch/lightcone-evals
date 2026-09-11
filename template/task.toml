@@ -18,9 +18,9 @@ email = "you@example.com"
 [metadata]
 category = "natural-science"
 difficulty = "medium"                   # easy | medium | hard
-# Converted tasks additionally carry provenance here (source_format, source_path,
-# source_commit, source_network_mode) — scripts/convert_task.py in lightcone-bench
-# fills those in. Hand-written tasks omit them.
+# Tasks once imported from SkillsBench carry provenance here (source_format,
+# source_path, source_commit, source_network_mode). New tasks are authored
+# Harbor-native and omit them.
 
 [verifier]
 timeout_sec = 420.0
