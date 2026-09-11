@@ -14,28 +14,12 @@ set +e
 # science_level (see the reward formula below) but each is also reported as
 # its own key, so "did the science" and "used ASTRA" stay individually
 # legible even though they now combine into one number.
-#
-# answer_found_elsewhere and figure_depends_on_output are diagnostic-only
-# flags, never scored. answer_found_elsewhere: the science rungs above read
-# /root/sn-cosmology/results/best_fit.json strictly (the prompt names that
-# exact path and its keys), so a fit filed anywhere else scores
-# science_level 0 — correctly, since the prompt asked for it plainly. This
-# flag re-runs the old glob+pattern search to tell "couldn't do the physics"
-# apart from "did the physics, filed it elsewhere" without letting that
-# search back into the score. figure_depends_on_output: whether the figure
-# output names the metric output as an upstream dependency in astra.yaml.
-# Neither instruction file asks for that structure and astra validate
-# accepts a figure that computes the fit inline, so it isn't required for
-# astra_spec_valid — it's just interesting, since provenance structure is
-# what ASTRA is for.
 
 mkdir -p /logs/verifier
 
 science_level=0
 astra_spec_valid=0
 astra_evidence_and_decisions=0
-answer_found_elsewhere=0
-figure_depends_on_output=0
 
 python3 -m pytest /tests/test_science_level_1_fit_and_figure.py -rA -v \
   > /logs/verifier/science-level-1.txt 2>&1
@@ -77,9 +61,6 @@ if [ "$rc" -eq 0 ]; then
   astra_evidence_and_decisions=1
 fi
 
-answer_found_elsewhere=$(python3 /tests/check_answer_elsewhere.py)
-figure_depends_on_output=$(python3 /tests/check_figure_dependency.py)
-
 # Collecting the agent's astra.yaml, best_fit.json, and hubble_diagram.png
 # for human review is task.toml's top-level `artifacts` job (declarative
 # source -> destination entries, landing under
@@ -93,7 +74,7 @@ figure_depends_on_output=$(python3 /tests/check_figure_dependency.py)
 # remain separately legible even though they combine into one score.
 reward=$(python3 -c "print(f'{0.6 * (${science_level} / 3) + 0.2 * ${astra_spec_valid} + 0.2 * ${astra_evidence_and_decisions}:.2f}')")
 printf '%s\n' "$reward" > /logs/verifier/reward.txt
-printf '{"reward": %s, "science_level": %d, "astra_spec_valid": %d, "astra_evidence_and_decisions": %d, "answer_found_elsewhere": %d, "figure_depends_on_output": %d}\n' \
-  "$reward" "$science_level" "$astra_spec_valid" "$astra_evidence_and_decisions" "$answer_found_elsewhere" "$figure_depends_on_output" \
+printf '{"reward": %s, "science_level": %d, "astra_spec_valid": %d, "astra_evidence_and_decisions": %d}\n' \
+  "$reward" "$science_level" "$astra_spec_valid" "$astra_evidence_and_decisions" \
   > /logs/verifier/reward.json
 exit 0
