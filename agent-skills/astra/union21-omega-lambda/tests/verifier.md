@@ -14,6 +14,9 @@ verifier:
       science_level:
         range: [0, 3]
         source: pytest
+        # The four numeric windows below restate tests/tolerances.json for
+        # readability. That file (and environment/project/contract.json for
+        # the paths/keys) is authoritative if the two ever disagree.
         levels:
           0: "no working fit"
           1: "recorded Omega_Lambda in [0.690, 0.735] AND a valid non-trivial Hubble diagram PNG"
@@ -77,17 +80,27 @@ option selected, and the magnitude-treatment decision with its marginalized
 option selected.
 
 **The science rungs read a named output contract strictly, not a glob.** Both
-instruction files tell the agent exactly where to put the answer:
-`/root/sn-cosmology/results/best_fit.json` with keys `omega_lambda` and
-`omega_lambda_err`, and `/root/sn-cosmology/results/hubble_diagram.png`. All
-three `science_level` pytest modules (`_util.py`'s `read_named_best_fit()`)
-read only that file and only those keys — no globbing, no key-name pattern
-matching. If the file is absent, unparseable, or missing a key,
-`science_level` is 0, which is correct: the prompt asked for it plainly, so
-"the answer exists somewhere in the agent's head or in stdout" is a real
-failure worth catching, not something the verifier should compensate for by
-searching harder. Level 3's value/uncertainty pairing is automatically the
-same estimate, since both keys are read from the one named file.
+instruction files tell the agent exactly where to put the answer, in wording
+that must match `environment/project/contract.json` — the single source of
+truth for the project root, the two result paths, and the two JSON key
+names. That same file is baked into the image at
+`/root/sn-cosmology/contract.json`, so `tests/_util.py`,
+`solution/scripts/fit.py`, `solution/scripts/plot_hubble.py`, and
+`solution/solve.sh` all read it rather than restating the paths or keys
+independently; `check_contract_drift.py` (task root, not part of `test.sh` —
+see its docstring for why) is the guard that the two instruction files still
+match it. All three `science_level` pytest modules (`_util.py`'s
+`read_named_best_fit()`) read only the contract's named file and keys — no
+globbing, no key-name pattern matching. If the file is absent, unparseable,
+or missing a key, `science_level` is 0, which is correct: the prompt asked
+for it plainly, so "the answer exists somewhere in the agent's head or in
+stdout" is a real failure worth catching, not something the verifier should
+compensate for by searching harder. Level 3's value/uncertainty pairing is
+automatically the same estimate, since both keys are read from the one named
+file. The four tolerance windows themselves live in `tests/tolerances.json`,
+kept out of the baked project deliberately — unlike the paths and keys, they
+are not disclosed in the prompt, and baking them in would leak the scoring
+thresholds to the agent.
 
 The looser glob+pattern search this task used to score with
 (`find_omega_lambda_estimates()` in `_util.py`) still exists, but purely as

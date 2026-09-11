@@ -49,11 +49,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--covariance", choices=sorted(COVARIANCE_FILES), required=True)
     parser.add_argument("--magnitude-treatment", choices=MAGNITUDE_TREATMENTS, required=True)
     parser.add_argument("--output", required=True, help="path to the output JSON file")
+    parser.add_argument(
+        "--contract",
+        default="contract.json",
+        help="path to the task's output contract (key names come from here)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    contract = json.loads(Path(args.contract).read_text(encoding="utf-8"))
     redshift, observed_mu, _statistical_error, _host_probability = np.loadtxt(
         args.data, comments="#", usecols=(1, 2, 3, 4), unpack=True
     )
@@ -96,8 +102,8 @@ def main() -> None:
     # freedom on it, on top of the one spent fitting Omega_Lambda.
     degrees_of_freedom = int(redshift.size - 1 - int(marginalize_magnitude))
     summary = {
-        "omega_lambda": omega_l,
-        "omega_lambda_err": omega_l_sigma,
+        contract["omega_lambda_key"]: omega_l,
+        contract["omega_lambda_err_key"]: omega_l_sigma,
         "h0_km_s_mpc": H0_KM_S_MPC,
         "omega_m": 1.0 - omega_l,
         "chi_squared": chi2_min,

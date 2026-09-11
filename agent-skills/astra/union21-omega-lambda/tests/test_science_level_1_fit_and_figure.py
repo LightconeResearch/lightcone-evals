@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from _util import NAMED_FIGURE_PATH, read_named_best_fit
+from _util import (
+    LEVEL_1_OMEGA_LAMBDA,
+    NAMED_BEST_FIT_PATH,
+    NAMED_FIGURE_PATH,
+    OMEGA_LAMBDA_KEY,
+    is_numeric,
+    read_named_best_fit,
+)
 
 # science_level 1: a working fit and a figure to show for it, at the exact
-# paths and keys the prompt asked for. Any legitimate combination of
-# covariance and magnitude treatment lands here — this level only checks the
-# cosmology fit itself is right and was actually run.
-OMEGA_LOWER, OMEGA_UPPER = 0.690, 0.735
+# paths and keys the prompt asked for (contract.json). Any legitimate
+# combination of covariance and magnitude treatment lands here — this level
+# only checks the cosmology fit itself is right and was actually run.
+OMEGA_LOWER, OMEGA_UPPER = LEVEL_1_OMEGA_LAMBDA
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 MIN_FIGURE_BYTES = 10_000
@@ -14,14 +21,14 @@ MIN_FIGURE_BYTES = 10_000
 
 def test_named_best_fit_reports_omega_lambda_in_expected_range() -> None:
     record = read_named_best_fit()
-    assert record is not None, "results/best_fit.json is missing or not valid JSON"
-    assert "omega_lambda" in record, f"results/best_fit.json has no 'omega_lambda' key: {sorted(record)}"
-    omega = record["omega_lambda"]
-    assert isinstance(omega, (int, float)) and not isinstance(omega, bool), (
-        f"omega_lambda is not numeric: {omega!r}"
+    assert record is not None, f"{NAMED_BEST_FIT_PATH} is missing or not valid JSON"
+    assert OMEGA_LAMBDA_KEY in record, (
+        f"best_fit.json has no '{OMEGA_LAMBDA_KEY}' key: {sorted(record)}"
     )
+    omega = record[OMEGA_LAMBDA_KEY]
+    assert is_numeric(omega), f"{OMEGA_LAMBDA_KEY} is not numeric: {omega!r}"
     assert OMEGA_LOWER <= omega <= OMEGA_UPPER, (
-        f"omega_lambda={omega} not in [{OMEGA_LOWER}, {OMEGA_UPPER}]"
+        f"{OMEGA_LAMBDA_KEY}={omega} not in [{OMEGA_LOWER}, {OMEGA_UPPER}]"
     )
 
 

@@ -1,0 +1,7 @@
+{
+  "project_root": "/root/sn-cosmology",
+  "best_fit_path": "results/best_fit.json",
+  "figure_path": "results/hubble_diagram.png",
+  "omega_lambda_key": "omega_lambda",
+  "omega_lambda_err_key": "omega_lambda_err"
+}

@@ -30,3 +30,28 @@ exists to produce, not a bug to fix. `science_level` (and therefore
 `reward = science_level / 3`) is the number that is comparable across all
 three tiers regardless of ASTRA use; see `tests/verifier.md` for the full
 rubric rationale.
+
+## Single sources of truth
+
+The output contract — the project root, the named result paths, and the two
+JSON key names both instruction files state in prose — is authoritative in
+`environment/project/contract.json`, not restated as independent literals
+anywhere else. It is baked into the image at `/root/sn-cosmology/contract.json`
+(safe for the agent to see: the prompt already discloses all of it), and
+`tests/_util.py`, `solution/scripts/fit.py`, `solution/scripts/plot_hubble.py`,
+and `solution/solve.sh` all read it rather than hardcoding the paths or keys.
+
+The four `science_level` tolerance windows are authoritative in
+`tests/tolerances.json` — deliberately *not* baked into the project, since
+exposing the scoring thresholds to the agent would leak what the ablation is
+measuring against. `tests/verifier.md` restates them in prose for
+readability; `tests/tolerances.json` and `environment/project/contract.json`
+are the values that actually govern scoring if the two ever disagree.
+
+`instruction.md` and `instruction-astra.md` are literal prose an agent
+reads, so they can't import `contract.json` — run `check_contract_drift.py`
+after editing either instruction file or the contract to confirm they still
+agree. That script can't run inside a Harbor container (see its own
+docstring for why) and isn't part of `test.sh`; it's a task-authoring guard,
+not a scored dimension, and never affects `science_level`, `reward`, or the
+ASTRA flags.

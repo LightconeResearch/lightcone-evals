@@ -41,17 +41,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data", required=True)
     parser.add_argument("--fit", required=True, help="path to the fit's output JSON file")
     parser.add_argument("--output", required=True, help="path to the output PNG file")
+    parser.add_argument(
+        "--contract",
+        default="contract.json",
+        help="path to the task's output contract (key names come from here)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    contract = json.loads(Path(args.contract).read_text(encoding="utf-8"))
     fit = load_fit(args.fit)
     redshift, observed_mu, statistical_error, _host_probability = np.loadtxt(
         args.data, comments="#", usecols=(1, 2, 3, 4), unpack=True
     )
     h0 = float(fit["h0_km_s_mpc"])
-    omega_l = float(fit["omega_lambda"])
+    omega_l = float(fit[contract["omega_lambda_key"]])
     model_mu = distance_modulus(redshift, h0, omega_l)
 
     z_curve = np.linspace(float(redshift.min()), float(redshift.max()), 400)
