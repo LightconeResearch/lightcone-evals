@@ -101,20 +101,65 @@ worth knowing, since provenance structure is exactly what ASTRA is for,
 but not something the prompt asked for and therefore not something to
 penalize.
 
-`astra_evidence_and_decisions` checks that the paper's Omega_Lambda
-constraint was verified as evidence AND that the spec's `decisions:` block
-names both choices — the covariance decision with its systematics-inclusive
-option selected, and the magnitude-treatment decision with its marginalized
-option selected. Unlike the figure-dependency structure, both instruction
-files explicitly ask for this: "the choices made along the way" captured in
-the spec, and the paper's result "recorded in the spec too, with evidence."
-Which two choices are checked isn't an arbitrary pick either — they're the
-same two seeded defects `science_level` 2 and 3 are built around, so an
-agent that reaches level 3 has necessarily made exactly these decisions
-numerically; this dimension checks whether that same agent also *recorded*
-them in the spec, as asked. The word-stem hint matching ("system"/
-"statistic", "margin"/"fixed") is a detection-tolerance choice, not a
-content requirement — the agent's own IDs and phrasing are never dictated.
+`astra_evidence_and_decisions` checks that at least one `prior_insight`
+concerning Suzuki et al.'s own Omega_Lambda constraint was verified as
+evidence, AND that the spec's `decisions:` block names both choices — the
+covariance decision with its systematics-inclusive option selected, and the
+magnitude-treatment decision with its marginalized option selected. Unlike
+the figure-dependency structure, both instruction files explicitly ask for
+this: "the choices made along the way" captured in the spec, and the
+paper's result "recorded in the spec too, with evidence." Which two choices
+are checked isn't an arbitrary pick either — they're the same two seeded
+defects `science_level` 2 and 3 are built around, so an agent that reaches
+level 3 has necessarily made exactly these decisions numerically; this
+dimension checks whether that same agent also *recorded* them in the spec,
+as asked.
+
+**Evidence: only the required claim's verification counts, not every
+citation the agent chose to add.** An earlier revision required *every*
+`prior_insight` in the spec to verify, which penalizes an agent for citing
+more than the prompt asked for — the same "does the prompt actually ask for
+this?" bug as the figure dependency, just on the evidence side. The prompt
+asks the agent to record the paper's own constraint with evidence; it does
+not ask for a fully-verified bibliography, and it does not forbid citing
+anything else. The check now finds the evidence id(s) whose DOI matches
+Suzuki et al. 2012 (`10.48550/arXiv.1105.3470` or its journal form
+`10.1088/0004-637X/746/1/85` — the same paper) and passes if *any* of those
+specific ids verify, regardless of whether some other, unrequested citation
+in the same spec failed.
+
+**Standing caveat on evidence verification in this environment.** The
+image only pre-caches the arXiv preprint DOI. `10.1088/0004-637X/746/1/85`
+(Suzuki's own journal DOI) and both Planck DOIs seen in practice
+(`10.1051/0004-6361/201833910`, `10.1051/0004-6361/201321529`) are behind a
+publisher paywall/CAPTCHA and genuinely unfetchable via `astra paper add` —
+confirmed by trying them with live network access, not inferred. An agent
+that cites the canonical published DOI over the arXiv preprint we happen to
+pre-cache will fail to verify that citation through no fault of its own
+reasoning; this is scoring our cache, not the agent, which is exactly why
+verification is scoped to "at least one" rather than "all."
+
+**Also worth knowing, not ours to fix:** `astra validate --verify-evidence`
+only checks evidence under `prior_insights`, never under `findings`. An
+agent that correctly records the paper comparison as a `finding` (with a
+perfectly good, cached DOI) gets no credit for it here — that's an
+ASTRA/CLI surface question, not this task's verifier's to work around, but
+worth knowing when reading a "0 verified" result: it can mean the content
+exists and is fine, just filed under the wrong top-level key.
+
+**Decision matching: check the selected option's own text, not what other
+options omit.** An earlier version of the covariance/magnitude matchers
+required one option's text to include a hint AND a *different* option's
+text to exclude the same hint (to avoid double-counting). This broke on a
+perfectly good spec: a statistics-only option naturally described as
+"...ignoring systematic uncertainties" contains the word "systematic" while
+describing the *other* choice, so the exclusion fired on prose that was
+correctly written. The matchers now read only the decision's *selected*
+(`default`) option's own text for an affirmative signal — `"system"` or the
+`covmat_sys` filename for the covariance decision, `"margin"` for the
+magnitude decision — and never inspect the non-selected option's prose at
+all. The agent's own IDs and phrasing are still never dictated; only the
+winning option needs to say what it is.
 
 **The science rungs read a named output contract strictly, not a glob.** Both
 instruction files tell the agent exactly where to put the answer, in wording
@@ -156,12 +201,13 @@ modes. The specific location(s) found, if any, are written to
 ASTRA spec authoring is a different matter from the named output contract:
 the agent chooses astra.yaml's own paths, decision IDs, and option IDs, so
 `astra_spec_valid` and `astra_evidence_and_decisions` stay tolerant there —
-pattern-matching option text for "systematic"/"statistical" and
-"marginalize"/"fixed" rather than requiring specific IDs, and never
-requiring a particular output-to-output dependency shape. What's checked
-strictly for those two flags is the validation outcomes (`astra validate`
-and `--verify-evidence` must both report full success) and that both
-decisions are present with the right option selected as default.
+pattern-matching the *selected* option's own text for "system"/`covmat_sys`
+and "margin" rather than requiring specific IDs, and never requiring a
+particular output-to-output dependency shape. What's checked strictly for
+those two flags is the validation outcomes (`astra validate` must report
+full schema+semantic success; the required Suzuki citation, specifically,
+must verify) and that both decisions are present with the right option
+selected as default.
 
 Each level's pytest module checks only its own incremental condition — level
 2's module does not re-check level 1's fit, level 3's does not re-check
