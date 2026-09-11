@@ -21,24 +21,15 @@ def test_astra_validate_passes_schema_and_semantics() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_spec_declares_a_data_input() -> None:
+def test_spec_declares_inputs_and_outputs() -> None:
+    # The prompt asks for a spec "capturing the inputs, the outputs and the
+    # choices made along the way", so that -- and nothing beyond it -- is
+    # what this asserts. Deliberately NOT asserted: which `type:` token an
+    # input or output carries (`data` vs `metric` vs `table` vs `figure` are
+    # all legal for these artifacts and the prompt names none of them), and
+    # whether the figure output depends on the metric output (a structural
+    # opinion the prompt never states; computing the fit inline inside the
+    # figure's recipe is a spec `astra validate` accepts).
     spec = yaml.safe_load(SPEC_PATH.read_text())
-    inputs = spec.get("inputs") or []
-    assert any(item.get("type") == "data" for item in inputs), "no data input declared"
-
-
-def test_spec_declares_a_metric_output() -> None:
-    spec = yaml.safe_load(SPEC_PATH.read_text())
-    outputs = spec.get("outputs") or []
-    assert any(output.get("type") == "metric" for output in outputs), "no metric output declared"
-
-
-def test_spec_declares_a_figure_output() -> None:
-    # Deliberately does NOT require the figure to depend on another declared
-    # output (e.g. the metric): neither instruction file asks for a
-    # particular dependency structure, and an agent computing the fit
-    # inline inside the figure's own recipe is a perfectly valid ASTRA spec
-    # that `astra validate` accepts.
-    spec = yaml.safe_load(SPEC_PATH.read_text())
-    outputs = spec.get("outputs") or []
-    assert any(output.get("type") == "figure" for output in outputs), "no figure output declared"
+    assert spec.get("inputs"), "no inputs declared"
+    assert spec.get("outputs"), "no outputs declared"

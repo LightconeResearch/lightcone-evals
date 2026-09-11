@@ -57,11 +57,12 @@ science at any level.
 **`science_level`, `astra_spec_valid`, and `astra_evidence_and_decisions`
 combine into `reward` as `0.6 * (science_level / 3) + 0.2 * astra_spec_valid
 + 0.2 * astra_evidence_and_decisions`, and each is still reported as its own
-key.** This task is tier A of a three-tier ablation (no ASTRA / ASTRA named /
-ASTRA named + plugin) — the instruction never says "ASTRA" at all, so the
-two ASTRA flags measure whether an agent reaches for it unprompted (tier A)
-or whether the plugin makes the difference (tier C), and score 0 for a
-baseline agent doing perfect, unassisted science. Earlier revisions of this
+key.** This one verifier serves all three tiers of the ablation (no ASTRA / ASTRA
+named / ASTRA named + plugin), so the two ASTRA flags measure whether an
+agent reaches for ASTRA unprompted under `instruction.md`, which never says
+"ASTRA" at all (tier A), or whether the plugin makes the difference (tier
+C). Under tier A they legitimately score 0 for an agent doing perfect,
+unassisted science. Earlier revisions of this
 task kept them out of the reward entirely on the reasoning that folding them
 in would make tier A's number incomparable to tier C's. That measured
 something real, but the reward is explicitly meant to measure instruction
@@ -76,8 +77,13 @@ still separate "did the science" from "used ASTRA" by looking at
 that distinction.
 
 `astra_spec_valid` checks that `astra.yaml` passes `astra validate` and
-declares a data input, a metric output, and a figure output — nothing more.
-The verdict comes from the CLI's exit code, not from re-reading its report.
+declares at least one input and at least one output — nothing more. The
+validity verdict comes from the CLI's exit code, not from re-reading its
+report. The inputs/outputs assertion is the prompt's own wording ("an
+`astra.yaml` capturing the inputs, the outputs and the choices made along
+the way"); no `type:` token is required, since `metric`, `data`, `table` and
+`figure` are all legal for these artifacts and neither instruction file
+names any of them.
 
 `astra_evidence_and_decisions` checks two things the prompt does ask for:
 that at least one evidence quote citing Suzuki et al. 2012 (by arXiv id or
@@ -93,8 +99,8 @@ trivial but well-formed decision now passes that half of the flag.
 from YAML.** `astra validate` decides validity and `astra paper verify-quote`
 decides whether a quote is in the paper, so those two are invoked and their
 exit codes read rather than re-derived. Everything else this verifier needs
-to know about the spec (which output types are declared, whether a decision
-selects one of its options) is read straight from the YAML, because
+to know about the spec (whether inputs and outputs are declared at all,
+whether a decision selects one of its options) is read straight from the YAML, because
 astra-tools 0.2.17 exposes no structured spec dump — `astra info --json`
 returns a rendered text blob.
 
@@ -113,9 +119,10 @@ verification is scoped to "at least one" rather than "all."
 either a real scoring bug or an obvious temptation; the rule is that the
 verifier may only require what the instruction file actually asks for.
 
-- A figure output naming the metric output as an upstream dependency — a
-  structural opinion the prompt never states; `test_astra_spec_valid.py`
-  carries the comment that keeps it out.
+- Particular `type:` tokens on the declared inputs and outputs, and a
+  figure output naming the metric output as an upstream dependency — both
+  structural opinions the prompt never states; `test_astra_spec_valid.py`
+  carries the comment that keeps them out.
 - Recipe commands on the metric or figure outputs — the prompt asks for
   inputs, outputs and choices, not executable provenance, and recipes are
   optional in the schema.

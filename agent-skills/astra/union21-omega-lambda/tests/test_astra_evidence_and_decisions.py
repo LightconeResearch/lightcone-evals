@@ -22,8 +22,7 @@ def _insights(spec: dict):
     """Every insight record, whether filed under prior_insights or findings.
 
     `astra validate --verify-evidence` verifies evidence identically under
-    both keys (cli.py:474-498), and the prompt names neither, so neither does
-    this check.
+    both keys, and the prompt names neither, so neither does this check.
     """
     for section in ("prior_insights", "findings"):
         value = spec.get(section) or {}

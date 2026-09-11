@@ -41,4 +41,4 @@ result paths, and the two JSON key names; `tests/tolerances.json` governs the
 four `science_level` windows and is deliberately kept out of the image, since
 baking the scoring thresholds into the project would leak them to the agent.
 Run `python3 check_contract_drift.py` after editing an instruction file,
-`contract.json`, or `task.toml`. See `tests/_util.py`'s docstring for why.
+`contract.json`, or `task.toml`. See that script's docstring for why it is not part of `test.sh`.
