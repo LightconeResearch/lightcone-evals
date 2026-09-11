@@ -28,6 +28,10 @@ verifier:
         range: [0, 1]
         source: pytest
         reward_contribution: none
+      answer_found_elsewhere:
+        range: [0, 1]
+        source: script
+        reward_contribution: none
   outputs:
     reward_text: /logs/verifier/reward.txt
     reward_json: /logs/verifier/reward.json
@@ -72,18 +76,41 @@ names both choices — the covariance decision with its systematics-inclusive
 option selected, and the magnitude-treatment decision with its marginalized
 option selected.
 
-The agent authors astra.yaml from scratch (if it authors one at all) and
-chooses its own output layout, so the physics tests never hardcode a file
-path or JSON key: they glob every JSON/YAML file under the project
-(excluding `data/` and the spec itself) and pattern-match on keys that look
-like an Omega_Lambda value or its uncertainty (`_util.py`'s
-`_OMEGA_KEY`/`_SIGMA_KEY` regexes), and the decision checks pattern-match
-option text for "systematic"/"statistical" and "marginalize"/"fixed" rather
-than requiring specific IDs. What's checked strictly is the physics (the
-recovered value and uncertainty must fall in narrow, paper-informed windows,
-and level 3's pairing must hold on a single recorded estimate, not two
-unrelated numbers) and the validation outcomes (`astra validate` and
-`--verify-evidence` must both report full success).
+**The science rungs read a named output contract strictly, not a glob.** Both
+instruction files tell the agent exactly where to put the answer:
+`/root/sn-cosmology/results/best_fit.json` with keys `omega_lambda` and
+`omega_lambda_err`, and `/root/sn-cosmology/results/hubble_diagram.png`. All
+three `science_level` pytest modules (`_util.py`'s `read_named_best_fit()`)
+read only that file and only those keys — no globbing, no key-name pattern
+matching. If the file is absent, unparseable, or missing a key,
+`science_level` is 0, which is correct: the prompt asked for it plainly, so
+"the answer exists somewhere in the agent's head or in stdout" is a real
+failure worth catching, not something the verifier should compensate for by
+searching harder. Level 3's value/uncertainty pairing is automatically the
+same estimate, since both keys are read from the one named file.
+
+The looser glob+pattern search this task used to score with
+(`find_omega_lambda_estimates()` in `_util.py`) still exists, but purely as
+the `answer_found_elsewhere` diagnostic (`check_answer_elsewhere.py`, run
+directly by `test.sh`, not through pytest): it re-scans every JSON/YAML
+under the project (excluding `data/` and the spec) for anything matching
+those old key-pattern regexes, outside the named file. It never touches
+`science_level` or `reward`. Its purpose is purely diagnostic — telling "the
+agent couldn't do the physics" (`answer_found_elsewhere: 0`, `science_level:
+0`) apart from "the agent did the physics but filed it somewhere else"
+(`answer_found_elsewhere: 1`, `science_level: 0`) when reviewing failure
+modes. The specific location(s) found, if any, are written to
+`/logs/verifier/answer-elsewhere.txt` rather than into `reward.json`, since
+`lightcone-bench`'s `summarize.py` only keeps numeric keys from that file.
+
+ASTRA spec authoring is a different matter from the named output contract:
+the agent chooses astra.yaml's own paths, decision IDs, and option IDs, so
+`astra_spec_valid` and `astra_evidence_and_decisions` stay tolerant there —
+pattern-matching option text for "systematic"/"statistical" and
+"marginalize"/"fixed" rather than requiring specific IDs. What's checked
+strictly for those two flags is the validation outcomes (`astra validate`
+and `--verify-evidence` must both report full success) and that both
+decisions are present with the right option selected as default.
 
 Each level's pytest module checks only its own incremental condition — level
 2's module does not re-check level 1's fit, level 3's does not re-check

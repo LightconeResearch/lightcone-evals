@@ -1,30 +1,30 @@
 from __future__ import annotations
 
-from _util import find_omega_lambda_estimates
+from _util import read_named_best_fit
 
 # Suzuki et al. 2012 published Omega_Lambda = 0.705 (+0.040, -0.043). Full
 # reproduction needs both seeded defects found together: the systematics
 # covariance (widens sigma) and analytic marginalization over the SN
-# absolute magnitude (widens it further, to ~0.041). Both bounds must hold
-# on the SAME recorded estimate, not just somewhere across different files,
-# since only that combination is an actual reproduction rather than two
-# unrelated numbers that happen to individually clear looser bars.
+# absolute magnitude (widens it further, to ~0.041). Reading a single named
+# file for both keys makes "same estimate" automatic.
 OMEGA_LOWER, OMEGA_UPPER = 0.697, 0.712
 SIGMA_LOWER, SIGMA_UPPER = 0.036, 0.046
 
 
-def test_paper_constraint_is_reproduced() -> None:
-    estimates = find_omega_lambda_estimates()
-    assert estimates, "no best-fit record found"
-    reproduced = [
-        (omega, sigma, path)
-        for omega, sigma, path in estimates
-        if sigma is not None
-        and OMEGA_LOWER <= omega <= OMEGA_UPPER
-        and SIGMA_LOWER <= sigma <= SIGMA_UPPER
-    ]
-    assert reproduced, (
-        f"no single recorded estimate had both Omega_Lambda in "
-        f"[{OMEGA_LOWER}, {OMEGA_UPPER}] and sigma in [{SIGMA_LOWER}, {SIGMA_UPPER}]: "
-        f"{[(o, s, str(p)) for o, s, p in estimates]}"
+def test_named_best_fit_reproduces_the_paper() -> None:
+    record = read_named_best_fit()
+    assert record is not None, "results/best_fit.json is missing or not valid JSON"
+    omega = record.get("omega_lambda")
+    sigma = record.get("omega_lambda_err")
+    assert isinstance(omega, (int, float)) and not isinstance(omega, bool), (
+        f"omega_lambda is not numeric: {omega!r}"
+    )
+    assert isinstance(sigma, (int, float)) and not isinstance(sigma, bool), (
+        f"omega_lambda_err is not numeric: {sigma!r}"
+    )
+    assert OMEGA_LOWER <= omega <= OMEGA_UPPER, (
+        f"omega_lambda={omega} not in [{OMEGA_LOWER}, {OMEGA_UPPER}]"
+    )
+    assert SIGMA_LOWER <= sigma <= SIGMA_UPPER, (
+        f"omega_lambda_err={sigma} not in [{SIGMA_LOWER}, {SIGMA_UPPER}]"
     )

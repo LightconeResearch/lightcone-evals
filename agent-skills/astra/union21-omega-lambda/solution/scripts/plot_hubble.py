@@ -33,17 +33,14 @@ def distance_modulus(redshift: np.ndarray, h0: float, omega_l: float) -> np.ndar
 
 
 def load_fit(path: str) -> dict:
-    fit_path = Path(path)
-    if fit_path.is_dir():
-        fit_path = fit_path / "best_fit.json"
-    return json.loads(fit_path.read_text(encoding="utf-8"))
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True)
-    parser.add_argument("--fit", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--fit", required=True, help="path to the fit's output JSON file")
+    parser.add_argument("--output", required=True, help="path to the output PNG file")
     return parser.parse_args()
 
 
@@ -53,8 +50,8 @@ def main() -> None:
     redshift, observed_mu, statistical_error, _host_probability = np.loadtxt(
         args.data, comments="#", usecols=(1, 2, 3, 4), unpack=True
     )
-    h0 = float(fit["H0_km_s_Mpc"])
-    omega_l = float(fit["Omega_L"])
+    h0 = float(fit["h0_km_s_mpc"])
+    omega_l = float(fit["omega_lambda"])
     model_mu = distance_modulus(redshift, h0, omega_l)
 
     z_curve = np.linspace(float(redshift.min()), float(redshift.max()), 400)
@@ -106,9 +103,9 @@ def main() -> None:
     bottom.set_ylabel("Residual μ")
     bottom.grid(alpha=0.2)
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output_dir / "hubble_diagram.png", dpi=180)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180)
     plt.close(figure)
 
 

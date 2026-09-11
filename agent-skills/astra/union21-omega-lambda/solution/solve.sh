@@ -20,11 +20,11 @@ python3 scripts/fit.py \
   --covmat-sys data/SCPUnion2.1_covmat_sys.txt \
   --covariance with_systematics \
   --magnitude-treatment marginalized \
-  --output results/best_fit
+  --output results/best_fit.json
 
 python3 scripts/plot_hubble.py \
   --data data/SCPUnion2.1_mu_vs_z.txt \
-  --fit results/best_fit \
-  --output results/hubble_diagram
+  --fit results/best_fit.json \
+  --output results/hubble_diagram.png
 
 astra validate "$PROJECT/astra.yaml" --verify-evidence

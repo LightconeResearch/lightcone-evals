@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--covmat-sys", required=True)
     parser.add_argument("--covariance", choices=sorted(COVARIANCE_FILES), required=True)
     parser.add_argument("--magnitude-treatment", choices=MAGNITUDE_TREATMENTS, required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--output", required=True, help="path to the output JSON file")
     return parser.parse_args()
 
 
@@ -96,10 +96,10 @@ def main() -> None:
     # freedom on it, on top of the one spent fitting Omega_Lambda.
     degrees_of_freedom = int(redshift.size - 1 - int(marginalize_magnitude))
     summary = {
-        "H0_km_s_Mpc": H0_KM_S_MPC,
-        "Omega_L": omega_l,
-        "Omega_L_sigma": omega_l_sigma,
-        "Omega_m": 1.0 - omega_l,
+        "omega_lambda": omega_l,
+        "omega_lambda_err": omega_l_sigma,
+        "h0_km_s_mpc": H0_KM_S_MPC,
+        "omega_m": 1.0 - omega_l,
         "chi_squared": chi2_min,
         "degrees_of_freedom": degrees_of_freedom,
         "reduced_chi_squared": chi2_min / degrees_of_freedom,
@@ -109,9 +109,9 @@ def main() -> None:
         "magnitude_treatment": args.magnitude_treatment,
     }
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    with (output_dir / "best_fit.json").open("w", encoding="utf-8") as stream:
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as stream:
         json.dump(summary, stream, indent=2, sort_keys=True)
         stream.write("\n")
     print(json.dumps(summary, sort_keys=True))
