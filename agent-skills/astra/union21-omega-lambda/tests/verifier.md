@@ -8,12 +8,13 @@ verifier:
       type: script
       command: ./test.sh
   rubric:
-    combine: ordinal_level_plus_out_of_band_flags
-    reward_formula: "science_level / 3"
+    combine: ordinal_level_plus_astra_flags_weighted_sum
+    reward_formula: "0.6 * (science_level / 3) + 0.2 * astra_spec_valid + 0.2 * astra_evidence_and_decisions"
     ordinal:
       science_level:
         range: [0, 3]
         source: pytest
+        weight_in_reward: 0.6
         # The four numeric windows below restate tests/tolerances.json for
         # readability. That file (and environment/project/contract.json for
         # the paths/keys) is authoritative if the two ever disagree.
@@ -22,15 +23,16 @@ verifier:
           1: "recorded Omega_Lambda in [0.690, 0.735] AND a valid non-trivial Hubble diagram PNG"
           2: "level 1, AND recorded 1-sigma in [0.025, 0.050] (systematics covariance found)"
           3: "level 2, AND recorded Omega_Lambda in [0.697, 0.712] AND 1-sigma in [0.036, 0.046] on the same estimate (paper reproduced)"
-    out_of_band_flags:
+    astra_flags:
       astra_spec_valid:
         range: [0, 1]
         source: pytest
-        reward_contribution: none
+        weight_in_reward: 0.2
       astra_evidence_and_decisions:
         range: [0, 1]
         source: pytest
-        reward_contribution: none
+        weight_in_reward: 0.2
+    diagnostic_only:
       answer_found_elsewhere:
         range: [0, 1]
         source: script
@@ -43,9 +45,9 @@ verifier:
 ## verifier intent
 
 This task no longer fits the `combine: weighted_sum` / independent-dimensions
-shape the template assumes, and the rubric block above says so explicitly
-rather than inventing weights that happen to reproduce a number. Two changes
-from a flat weighted rubric, and why:
+shape the template assumes on its own, and the rubric block above says so
+explicitly rather than inventing three peer weights that happen to reproduce
+a number.
 
 **`science_level` is one ordinal 0-3, not three weighted dimensions.**
 `fit_correct` -> `systematics_covariance` -> `paper_reproduced` are strictly
@@ -53,22 +55,31 @@ nested: you cannot reach level 3 without level 2, or level 2 without level
 1. That is a single ladder of scientific progress, not three independent
 things needing relative importances nobody could actually justify (why would
 finding the systematics covariance be worth more than a working fit but less
-than a full reproduction, and by how much?). `reward = science_level / 3` is
-the entire formula — nothing else is summed in. The old `analysis_executed`
+than a full reproduction, and by how much?). The old `analysis_executed`
 dimension (a valid, non-trivial Hubble diagram PNG) is absorbed into level 1,
 since a fit without a figure to show for it isn't yet a completed piece of
 science at any level.
 
-**`astra_spec_valid` and `astra_evidence_and_decisions` are reported, never
-scored.** This task is tier A of a three-tier ablation (no ASTRA / ASTRA
-named / ASTRA named + plugin) — the instruction never says "ASTRA" at all,
-so these two flags measure whether an agent reaches for it unprompted (tier
-A) or whether the plugin makes the difference (tier C). Both legitimately
-score 0 for a baseline agent doing perfect, unassisted science, and that is
-exactly the point: folding them into the reward would mean tier A caps at
-some reward less than 1.0 however good the science is, making its number
-incomparable to tier C's. Keeping them out-of-band is what makes
-`science_level` the one number that means the same thing in every tier.
+**`science_level`, `astra_spec_valid`, and `astra_evidence_and_decisions`
+combine into `reward` as `0.6 * (science_level / 3) + 0.2 * astra_spec_valid
++ 0.2 * astra_evidence_and_decisions`, and each is still reported as its own
+key.** This task is tier A of a three-tier ablation (no ASTRA / ASTRA named /
+ASTRA named + plugin) — the instruction never says "ASTRA" at all, so the
+two ASTRA flags measure whether an agent reaches for it unprompted (tier A)
+or whether the plugin makes the difference (tier C), and score 0 for a
+baseline agent doing perfect, unassisted science. Earlier revisions of this
+task kept them out of the reward entirely on the reasoning that folding them
+in would make tier A's number incomparable to tier C's. That measured
+something real, but the reward is explicitly meant to measure instruction
+following for now — deeper science-capability rubrics are a later
+milestone — and both the science ladder and ASTRA activation are examples
+of instructions the prompt actually gives (tier B/C's prompt does say "set
+this up as an ASTRA analysis"), so both belong in the one number that
+answers "did the agent do what was asked." Keeping each also reported
+individually is what preserves the earlier objection's point: a reader can
+still separate "did the science" from "used ASTRA" by looking at
+`science_level` versus the two flags, without the combined `reward` hiding
+that distinction.
 
 `astra_spec_valid` checks that `astra.yaml` is schema- and
 semantically-valid and declares a data input, a metric output, and a

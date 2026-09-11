@@ -26,10 +26,13 @@ converge and the ablation would measure nothing.
 The verifier is identical across all three tiers. `astra_spec_valid` and
 `astra_evidence_and_decisions` legitimately score 0 for a tier-A (or a
 low-effort tier-B) run — that is the activation measurement the ablation
-exists to produce, not a bug to fix. `science_level` (and therefore
-`reward = science_level / 3`) is the number that is comparable across all
-three tiers regardless of ASTRA use; see `tests/verifier.md` for the full
-rubric rationale.
+exists to produce, not a bug to fix. `reward = 0.6 * (science_level / 3) +
+0.2 * astra_spec_valid + 0.2 * astra_evidence_and_decisions`: the reward
+measures instruction-following for now (both the science ladder and ASTRA
+activation are things the prompt asks for), while `science_level` and the
+two ASTRA flags are each still reported individually so "did the science"
+stays legible from "used ASTRA" even though they combine into one score;
+see `tests/verifier.md` for the full rubric rationale.
 
 ## Single sources of truth
 
@@ -53,5 +56,5 @@ reads, so they can't import `contract.json` — run `check_contract_drift.py`
 after editing either instruction file or the contract to confirm they still
 agree. That script can't run inside a Harbor container (see its own
 docstring for why) and isn't part of `test.sh`; it's a task-authoring guard,
-not a scored dimension, and never affects `science_level`, `reward`, or the
-ASTRA flags.
+not a scored dimension, and never affects `science_level`, `reward`, or
+either ASTRA flag.

@@ -8,10 +8,12 @@ set +e
 # script only advances the ladder while the previous rung held, so the
 # nesting is enforced structurally rather than by weighting or re-checking.
 #
-# astra_spec_valid and astra_evidence_and_decisions are separate 0/1 flags,
-# reported alongside but never summed into reward: they measure whether the
-# agent reached for ASTRA at all (tier A of the ablation) or whether the
-# plugin worked (tier C), not how good the science is.
+# astra_spec_valid and astra_evidence_and_decisions are 0/1 flags measuring
+# whether the agent reached for ASTRA at all (tier A of the ablation) or
+# whether the plugin worked (tier C). They are folded into reward alongside
+# science_level (see the reward formula below) but each is also reported as
+# its own key, so "did the science" and "used ASTRA" stay individually
+# legible even though they now combine into one number.
 #
 # answer_found_elsewhere is a third diagnostic-only flag: the science rungs
 # above read /root/sn-cosmology/results/best_fit.json strictly (the prompt
@@ -70,9 +72,26 @@ fi
 
 answer_found_elsewhere=$(python3 /tests/check_answer_elsewhere.py)
 
+# Collect the agent's actual work products for human review. /logs/verifier
+# is bind-mounted straight through to the run's artifacts (confirmed in
+# Harbor's source, harbor/trial/trial.py: it mounts verifier_dir directly,
+# no separate [verifier].collect or [[artifacts]] entry needed — those exist
+# for snapshot commands and extra non-verifier paths, not for files the
+# verifier itself already writes here), so anything copied below just shows
+# up in the trial's own directory. Paths come from contract.json, the same
+# single source of truth the science_level tests read.
 cp /root/sn-cosmology/astra.yaml /logs/verifier/astra.yaml 2>/dev/null || true
+best_fit_path=$(python3 -c "import json; print(json.load(open('/root/sn-cosmology/contract.json'))['best_fit_path'])" 2>/dev/null)
+figure_path=$(python3 -c "import json; print(json.load(open('/root/sn-cosmology/contract.json'))['figure_path'])" 2>/dev/null)
+cp "/root/sn-cosmology/$best_fit_path" /logs/verifier/best_fit.json 2>/dev/null || true
+cp "/root/sn-cosmology/$figure_path" /logs/verifier/hubble_diagram.png 2>/dev/null || true
 
-reward=$(python3 -c "print(f'{${science_level} / 3:.2f}')")
+# reward folds science_level (0.6) and the two ASTRA flags (0.2 each) into
+# one number, per instruction: instruction-following is what's being
+# measured for now, so it belongs in reward. Each component stays reported
+# individually below too, precisely so "did the science" and "used ASTRA"
+# remain separately legible even though they combine into one score.
+reward=$(python3 -c "print(f'{0.6 * (${science_level} / 3) + 0.2 * ${astra_spec_valid} + 0.2 * ${astra_evidence_and_decisions}:.2f}')")
 printf '%s\n' "$reward" > /logs/verifier/reward.txt
 printf '{"reward": %s, "science_level": %d, "astra_spec_valid": %d, "astra_evidence_and_decisions": %d, "answer_found_elsewhere": %d}\n' \
   "$reward" "$science_level" "$astra_spec_valid" "$astra_evidence_and_decisions" "$answer_found_elsewhere" \
