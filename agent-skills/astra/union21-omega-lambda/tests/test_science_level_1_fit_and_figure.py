@@ -2,15 +2,22 @@ from __future__ import annotations
 
 from _util import find_omega_lambda_estimates, iter_png_files
 
+# science_level 1: a working fit and a figure to show for it. Any legitimate
+# combination of covariance and magnitude treatment lands here — this level
+# only checks the cosmology fit itself is right and was actually run.
+OMEGA_LOWER, OMEGA_UPPER = 0.690, 0.735
+
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 MIN_FIGURE_BYTES = 10_000
 
 
-def test_best_fit_artifact_exists_and_is_machine_readable() -> None:
+def test_recovered_omega_lambda_is_in_expected_range() -> None:
     estimates = find_omega_lambda_estimates()
-    assert estimates, (
-        "no JSON or YAML file under the project carried a field that looks like "
-        "an Omega_Lambda best-fit value"
+    assert estimates, "no best-fit record found"
+    in_range = [omega for omega, _sigma, _path in estimates if OMEGA_LOWER <= omega <= OMEGA_UPPER]
+    assert in_range, (
+        f"no recorded Omega_Lambda estimate fell in [{OMEGA_LOWER}, {OMEGA_UPPER}]: "
+        f"{[(o, str(p)) for o, _s, p in estimates]}"
     )
 
 
