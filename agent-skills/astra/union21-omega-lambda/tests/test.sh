@@ -39,11 +39,11 @@ run_dimension evidence_verified /tests/test_astra.py
 # jobs/<ts>/<trial>/artifacts/), not this script's -- this file is scoring
 # only. See task.toml for why and where.
 
-if [ "$variant" = "baseline" ]; then
-  reward=$(python3 -c "print(f'{(${fit_and_figure} + ${systematics_covariance} + ${paper_reproduced}) / 3:.2f}')")
-else
-  reward=$(python3 -c "print(f'{(${fit_and_figure} + ${systematics_covariance} + ${paper_reproduced} + ${spec_valid} + ${evidence_verified}) / 5:.2f}')")
-fi
+case "$variant" in
+  baseline) reward=$(python3 -c "print(f'{(${fit_and_figure} + ${systematics_covariance} + ${paper_reproduced}) / 3:.2f}')") ;;
+  astra)    reward=$(python3 -c "print(f'{(${fit_and_figure} + ${systematics_covariance} + ${paper_reproduced} + ${spec_valid} + ${evidence_verified}) / 5:.2f}')") ;;
+  *) echo "unknown PROMPT_VARIANT '$variant'" >&2; exit 1 ;;
+esac
 
 printf '%s\n' "$reward" > /logs/verifier/reward.txt
 printf '{"reward": %s, "prompt_variant": "%s", "fit_and_figure": %d, "systematics_covariance": %d, "paper_reproduced": %d, "spec_valid": %d, "evidence_verified": %d}\n' \
