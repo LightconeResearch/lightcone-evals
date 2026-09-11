@@ -7,7 +7,7 @@ artifacts = []
 [task]
 name = "lightcone/union21-omega-lambda"
 version = "1.0.0"
-description = "The agent must author an astra.yaml from scratch for a flat-LCDM fit to the Union2.1 supernova compilation, implement and run the analysis, verify a quote from the source paper as evidence, and record a decision about which covariance matrix to use."
+description = "The agent must fit a flat-LCDM model to the Union2.1 supernova compilation for Omega_Lambda and reproduce Suzuki et al. 2012's own published constraint, which requires discovering two seeded defects (the systematics covariance matrix, and analytically marginalizing over the SN absolute magnitude) and, if it reaches for ASTRA, authoring an astra.yaml recording both as decisions with the paper's constraint verified as evidence."
 keywords = ["astra", "cosmology", "supernovae", "spec-authoring", "evidence"]
 [[task.authors]]
 name = "cailmdaley"

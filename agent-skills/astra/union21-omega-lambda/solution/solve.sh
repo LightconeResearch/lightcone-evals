@@ -19,6 +19,7 @@ python3 scripts/fit.py \
   --covmat-nosys data/SCPUnion2.1_covmat_nosys.txt \
   --covmat-sys data/SCPUnion2.1_covmat_sys.txt \
   --covariance with_systematics \
+  --magnitude-treatment marginalized \
   --output results/best_fit
 
 python3 scripts/plot_hubble.py \

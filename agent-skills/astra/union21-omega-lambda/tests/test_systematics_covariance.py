@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from _util import find_omega_lambda_estimates
 
-# Suzuki et al. 2012 published Omega_Lambda = 0.705 (+0.040, -0.043); ours is
-# only comparable once the systematics-inclusive covariance is used, which
-# widens sigma from ~0.013 (statistical only) to ~0.030. This dimension is
-# scored separately from the central value: the value tests the fit itself,
-# this tests whether the agent found and used the systematics covariance.
-LOWER, UPPER = 0.022, 0.040
+# Statistical-only uncertainty is ~0.013 (fixed M) or ~0.020 (marginalized M);
+# switching to the systematics-inclusive covariance alone widens it to
+# ~0.030, and to ~0.041 once M is also marginalized. This window catches
+# "the systematics covariance was found" regardless of the magnitude
+# treatment, while excluding both statistical-only cases.
+LOWER, UPPER = 0.025, 0.050
 
 
-def test_final_recorded_uncertainty_is_comparable_to_the_paper() -> None:
+def test_recorded_uncertainty_shows_systematics_covariance_was_found() -> None:
     estimates = find_omega_lambda_estimates()
     assert estimates, "no best-fit record found"
     sigmas = [sigma for _omega, sigma, _path in estimates if sigma is not None]

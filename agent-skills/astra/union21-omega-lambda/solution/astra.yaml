@@ -4,7 +4,11 @@ description: |
   Fit a flat LCDM model to the Union2.1 Type Ia supernova distance moduli,
   varying only Omega_Lambda. H0 is held fixed at 70 km/s/Mpc, matching the
   h = 0.7 calibration baked into the data file's own absolute-magnitude
-  header, rather than fit alongside Omega_Lambda.
+  header, rather than fit alongside Omega_Lambda. Reproducing Suzuki et al.
+  (2012)'s own published constraint from the same 580 supernovae additionally
+  requires the systematics-inclusive covariance and analytically
+  marginalizing over the SN absolute magnitude; see the `covariance` and
+  `magnitude_treatment` decisions below.
 
 inputs:
   - id: union21
@@ -34,9 +38,10 @@ outputs:
     description: >
       Best-fit Omega_Lambda and its 1-sigma uncertainty from a chi-squared
       minimization against the full covariance matrix selected by the
-      `covariance` decision, with H0 fixed at 70 km/s/Mpc.
+      `covariance` decision, with H0 fixed at 70 km/s/Mpc and the SN absolute
+      magnitude treated per the `magnitude_treatment` decision.
     inputs: [union21, covmat_nosys, covmat_sys]
-    decisions: [covariance]
+    decisions: [covariance, magnitude_treatment]
     recipe:
       command: >-
         python scripts/fit.py
@@ -44,6 +49,7 @@ outputs:
         --covmat-nosys {inputs.covmat_nosys}
         --covmat-sys {inputs.covmat_sys}
         --covariance {decisions.covariance}
+        --magnitude-treatment {decisions.magnitude_treatment}
         --output {output}
 
   - id: hubble_diagram
@@ -70,8 +76,9 @@ decisions:
       construction. Suzuki et al. (2012)'s published Omega_Lambda constraint
       includes systematics; comparing our uncertainty to theirs requires
       switching to covmat_sys. The central value barely moves, but the
-      uncertainty grows from 0.013 to 0.030 and only then is it comparable
-      to the paper's 0.040/-0.043.
+      uncertainty grows from 0.013 to 0.030 - closer to the paper's
+      0.040/-0.043, though matching it also requires marginalizing over the
+      SN absolute magnitude (see `magnitude_treatment`).
     default: with_systematics
     options:
       statistical_only:
@@ -80,6 +87,28 @@ decisions:
       with_systematics:
         label: "Statistical plus systematic"
         description: covmat_sys.txt - needed for a fair comparison against Suzuki et al.'s published, systematics-inclusive constraint
+
+  magnitude_treatment:
+    label: "SN absolute magnitude treatment"
+    tags: [inference, uncertainty]
+    rationale: >
+      The tabulated distance moduli are calibrated to a single fixed
+      absolute magnitude M(h=0.7) from the data header. Suzuki et al. (2012)
+      instead analytically marginalize over an additive offset Delta_M in
+      distance modulus with a flat prior: chi2_marg = A - B^2/E, where
+      A = r^T C^-1 r, B = r^T C^-1 1, and E = 1^T C^-1 1 (the dropped
+      normalization term ln(E / 2*pi) does not depend on Omega_Lambda).
+      Marginalizing widens the uncertainty without moving the central value
+      much, and is required together with the systematics covariance to
+      reproduce the paper's own constraint rather than merely resemble it.
+    default: marginalized
+    options:
+      fixed:
+        label: "Fixed absolute magnitude"
+        description: Use the data header's M(h=0.7) as given, with no further adjustment
+      marginalized:
+        label: "Marginalized absolute magnitude"
+        description: Analytically marginalize over an additive Delta_M offset with a flat prior, as Suzuki et al. (2012) do
 
 prior_insights:
   suzuki_2012_result:

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from _util import find_omega_lambda_estimates
 
-# Suzuki et al. 2012: Omega_Lambda = 0.705 (+0.040, -0.043). Our own fit lands
-# at 0.722 (statistical only) or 0.714 (with systematics); this window covers
-# either legitimate choice of covariance while rejecting a wrong cosmology.
-LOWER, UPPER = 0.695, 0.745
+# Any legitimate combination of covariance and magnitude treatment lands
+# here; this dimension only checks the cosmology fit itself is right.
+LOWER, UPPER = 0.690, 0.735
 
 
 def test_recovered_omega_lambda_is_in_expected_range() -> None:
