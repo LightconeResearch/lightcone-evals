@@ -1,0 +1,41 @@
+# Harbor task manifest (schema 1.4). This file is the Harbor-specific wrapper —
+# everything under environment/, solution/, tests/ and instruction.md is plain
+# files a future base layer could reuse.
+schema_version = "1.4"
+artifacts = []
+
+[task]
+name = "lightcone/union21-omega-lambda"
+version = "1.0.0"
+description = "The agent must author an astra.yaml from scratch for a flat-LCDM fit to the Union2.1 supernova compilation, implement and run the analysis, verify a quote from the source paper as evidence, and record a decision about which covariance matrix to use."
+keywords = ["astra", "cosmology", "supernovae", "spec-authoring", "evidence"]
+[[task.authors]]
+name = "cailmdaley"
+email = "cailmdaley@gmail.com"
+
+[metadata]
+category = "natural-science"
+difficulty = "medium"
+
+[verifier]
+timeout_sec = 420.0
+collect = []
+
+[verifier.env]
+
+[agent]
+timeout_sec = 1200.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 1800.0
+os = "linux"
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]

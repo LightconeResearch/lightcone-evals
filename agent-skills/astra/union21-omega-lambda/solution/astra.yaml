@@ -1,0 +1,99 @@
+version: "0.0.14"
+name: "Cosmic expansion from Type Ia supernovae"
+description: |
+  Fit a flat LCDM model to the Union2.1 Type Ia supernova distance moduli,
+  varying only Omega_Lambda. H0 is held fixed at 70 km/s/Mpc, matching the
+  h = 0.7 calibration baked into the data file's own absolute-magnitude
+  header, rather than fit alongside Omega_Lambda.
+
+inputs:
+  - id: union21
+    type: data
+    source: data/SCPUnion2.1_mu_vs_z.txt
+    description: >
+      Union2.1 SN Ia compilation: 580 supernovae spanning z = 0.015-1.414,
+      with redshift, distance modulus, and statistical uncertainty. The
+      header gives alpha, beta, delta and M(h=0.7) for both error
+      treatments; the tabulated statistical error column matches the
+      diagonal of covmat_nosys exactly.
+  - id: covmat_nosys
+    type: data
+    source: data/SCPUnion2.1_covmat_nosys.txt
+    description: >
+      580x580 statistical-only covariance matrix. Its diagonal reproduces
+      the mu_vs_z table's own error column exactly.
+  - id: covmat_sys
+    type: data
+    source: data/SCPUnion2.1_covmat_sys.txt
+    description: 580x580 covariance matrix including systematic errors.
+
+outputs:
+  - id: best_fit
+    type: metric
+    format: json
+    description: >
+      Best-fit Omega_Lambda and its 1-sigma uncertainty from a chi-squared
+      minimization against the full covariance matrix selected by the
+      `covariance` decision, with H0 fixed at 70 km/s/Mpc.
+    inputs: [union21, covmat_nosys, covmat_sys]
+    decisions: [covariance]
+    recipe:
+      command: >-
+        python scripts/fit.py
+        --data {inputs.union21}
+        --covmat-nosys {inputs.covmat_nosys}
+        --covmat-sys {inputs.covmat_sys}
+        --covariance {decisions.covariance}
+        --output {output}
+
+  - id: hubble_diagram
+    type: figure
+    format: png
+    description: >
+      Two-panel Hubble diagram sharing a redshift axis: distance modulus
+      with the best-fit flat-LCDM curve on top, residuals below.
+    inputs: [union21, best_fit]
+    recipe:
+      command: >-
+        python scripts/plot_hubble.py
+        --data {inputs.union21}
+        --fit {inputs.best_fit}
+        --output {output}
+
+decisions:
+  covariance:
+    label: "Covariance matrix"
+    tags: [data, uncertainty]
+    rationale: >
+      The mu_vs_z table's own statistical-error column matches the diagonal
+      of covmat_nosys exactly, so the initial fit was statistical-only by
+      construction. Suzuki et al. (2012)'s published Omega_Lambda constraint
+      includes systematics; comparing our uncertainty to theirs requires
+      switching to covmat_sys. The central value barely moves, but the
+      uncertainty grows from 0.013 to 0.030 and only then is it comparable
+      to the paper's 0.040/-0.043.
+    default: with_systematics
+    options:
+      statistical_only:
+        label: "Statistical only"
+        description: covmat_nosys.txt - matches the table's own error column
+      with_systematics:
+        label: "Statistical plus systematic"
+        description: covmat_sys.txt - needed for a fair comparison against Suzuki et al.'s published, systematics-inclusive constraint
+
+prior_insights:
+  suzuki_2012_result:
+    label: "Union2.1's own dark-energy constraint"
+    claim: >
+      Suzuki et al. (2012) constrain the dark energy density from these
+      supernovae alone, in a flat universe, to Omega_Lambda = 0.705
+      (+0.040, -0.043) including systematic errors.
+    created_at: "2026-09-11T00:00:00Z"
+    tags: [physics, priors]
+    evidence:
+      - id: suzuki_2012_sne_alone_flat_lcdm
+        doi: "10.48550/arXiv.1105.3470"
+        quote:
+          exact: "In a flat Universe, SNe Ia alone constrain the dark-energy density, ΩΛ, to be ΩΛ = 0.705+0.040−0.043 including systematics"
+        location:
+          value: "page=17"
