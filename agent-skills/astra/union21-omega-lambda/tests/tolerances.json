@@ -1,6 +1,6 @@
 {
-  "level_1_omega_lambda": [0.690, 0.735],
-  "level_2_omega_lambda_err": [0.025, 0.050],
-  "level_3_omega_lambda": [0.697, 0.712],
-  "level_3_omega_lambda_err": [0.036, 0.046]
+  "fit_and_figure_omega_lambda": [0.690, 0.735],
+  "systematics_covariance_omega_lambda_err": [0.025, 0.050],
+  "paper_reproduced_omega_lambda": [0.697, 0.712],
+  "paper_reproduced_omega_lambda_err": [0.036, 0.046]
 }

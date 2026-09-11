@@ -9,19 +9,18 @@ Two files are the single source of truth here, not this module's own code:
   root, the named result paths, and the two JSON key names. It is safe for
   the agent to see, since the prompt already discloses all of it verbatim.
 - `tolerances.json`, next to this file in `tests/` (never baked into the
-  project — these are the science_level pass/fail windows, and exposing
+  project — these are the science-dimension pass/fail windows, and exposing
   them to the agent would leak the scoring thresholds the ablation is
   measuring against).
 
-The `science_level` rungs read the named contract strictly — no globbing, no
+The science dimensions read the named contract strictly — no globbing, no
 key-name pattern matching — because the prompt states the contract in plain
 prose, so "the answer exists somewhere in the agent's head or in stdout" is
-a real failure worth catching as science_level 0, not one the verifier
-should compensate for by searching harder.
+a real failure worth catching as a failed science dimension, not one the
+verifier should compensate for by searching harder.
 
 ASTRA spec authoring (astra.yaml's own paths, decision IDs, option IDs) is a
-different matter: the agent chooses those, so `test_astra_spec_valid.py` and
-`test_astra_evidence_and_decisions.py` stay tolerant there.
+different matter: the agent chooses those, so `test_astra.py` stays tolerant there.
 """
 
 from __future__ import annotations
@@ -43,10 +42,10 @@ NAMED_FIGURE_PATH = PROJECT / _CONTRACT["figure_path"]
 OMEGA_LAMBDA_KEY = _CONTRACT["omega_lambda_key"]
 OMEGA_LAMBDA_ERR_KEY = _CONTRACT["omega_lambda_err_key"]
 
-LEVEL_1_OMEGA_LAMBDA = tuple(_TOLERANCES["level_1_omega_lambda"])
-LEVEL_2_OMEGA_LAMBDA_ERR = tuple(_TOLERANCES["level_2_omega_lambda_err"])
-LEVEL_3_OMEGA_LAMBDA = tuple(_TOLERANCES["level_3_omega_lambda"])
-LEVEL_3_OMEGA_LAMBDA_ERR = tuple(_TOLERANCES["level_3_omega_lambda_err"])
+FIT_AND_FIGURE_OMEGA_LAMBDA = tuple(_TOLERANCES["fit_and_figure_omega_lambda"])
+SYSTEMATICS_OMEGA_LAMBDA_ERR = tuple(_TOLERANCES["systematics_covariance_omega_lambda_err"])
+PAPER_OMEGA_LAMBDA = tuple(_TOLERANCES["paper_reproduced_omega_lambda"])
+PAPER_OMEGA_LAMBDA_ERR = tuple(_TOLERANCES["paper_reproduced_omega_lambda_err"])
 
 
 def is_numeric(value: object) -> bool:

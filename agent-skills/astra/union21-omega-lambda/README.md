@@ -23,22 +23,38 @@ but deliberately does not teach the format — no `prior_insights`,
 format is the skill's job; if the prompt taught it too, tiers B and C would
 converge and the ablation would measure nothing.
 
-The verifier is identical across all three tiers. `astra_spec_valid` and
-`astra_evidence_and_decisions` legitimately score 0 for a tier-A (or a
-low-effort tier-B) run — that is the activation measurement the ablation
-exists to produce, not a bug to fix. `reward = 0.6 * (science_level / 3) +
-0.2 * astra_spec_valid + 0.2 * astra_evidence_and_decisions`: the reward
-measures instruction-following for now (both the science ladder and ASTRA
-activation are things the prompt asks for), while `science_level` and the
-two ASTRA flags are each still reported individually so "did the science"
-stays legible from "used ASTRA" even though they combine into one score;
-see `tests/verifier.md` for the full rubric rationale.
+The verifier is one script for all three tiers. It scores five independent
+0/1 dimensions — `fit_and_figure`, `systematics_covariance`,
+`paper_reproduced`, `spec_valid`, `evidence_verified` — and reports all five
+on every tier, so "did the science" stays legible from "used ASTRA".
+
+Only the reward is tier-dependent, because the prompts are:
+
+```
+baseline (instruction.md)        reward = mean(fit_and_figure, systematics_covariance, paper_reproduced)
+astra    (instruction-astra.md)  reward = mean(the same three, spec_valid, evidence_verified)
+```
+
+A prompt that never mentions ASTRA cannot be scored on ASTRA flags; under
+tier A those two flags carry their real measured values (usually 0 — that is
+the activation measurement the ablation exists to produce) while contributing
+nothing to reward. A weak spec can pull a tier-B/C run below an
+otherwise-identical tier-A run: rewards are comparable *within* a prompt,
+never across prompts.
+
+The verifier learns which prompt ran from `task.toml`'s `[verifier.env]
+PROMPT_VARIANT`, never from the agent's artifacts. Whoever swaps the
+instruction file must also write that key — `materialize.sh`'s
+`PROMPT_VARIANT` block in `lightcone-bench` does, and so must any local sweep
+driver that copies the task dir itself. The committed default is `"baseline"`,
+correct for an unmaterialized task dir. See `tests/verifier.md` for the full
+rubric rationale.
 
 ## Single sources of truth
 
 `environment/project/contract.json` governs the project root, the two named
 result paths, and the two JSON key names; `tests/tolerances.json` governs the
-four `science_level` windows and is deliberately kept out of the image, since
+four science-dimension windows and is deliberately kept out of the image, since
 baking the scoring thresholds into the project would leak them to the agent.
 Run `python3 check_contract_drift.py` after editing an instruction file,
 `contract.json`, or `task.toml`. See that script's docstring for why it is not part of `test.sh`.

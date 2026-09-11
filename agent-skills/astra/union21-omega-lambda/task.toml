@@ -32,6 +32,16 @@ timeout_sec = 420.0
 collect = []
 
 [verifier.env]
+# Which instruction file this materialized copy carries: "baseline" =
+# instruction.md (never mentions ASTRA), "astra" = instruction-astra.md.
+# Written by whoever swapped the instruction in (lightcone-bench's
+# materialize.sh PROMPT_VARIANT block, or the local sweep driver) — never by
+# inspecting the agent's work. Harbor passes [verifier.env] through to the
+# verifier as real environment variables, where tests/test.sh reads it to
+# pick the reward formula. The committed default is "baseline", so an
+# unmaterialized task dir — whose instruction.md IS the baseline prompt —
+# scores coherently.
+PROMPT_VARIANT = "baseline"
 
 [agent]
 timeout_sec = 1200.0
