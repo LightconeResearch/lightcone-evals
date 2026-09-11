@@ -8,8 +8,12 @@ from _util import PROJECT, SPEC_PATH
 
 # Suzuki et al. 2012 can be cited by its arXiv id (which is how the prompt
 # itself names the paper, in any of the doi/arXiv spellings that embed it) or
-# by the journal's own DOI. Either identifies the same paper.
+# by the journal's own DOI. Either identifies the same paper -- but the image
+# caches it under the arXiv DOI only (environment/Dockerfile), so a journal
+# citation is verified against that cached copy rather than failing as
+# "not in cache" for choosing the other legitimate identifier.
 _SUZUKI_ARXIV_ID = "1105.3470"
+_SUZUKI_ARXIV_DOI = "10.48550/arXiv.1105.3470"
 _SUZUKI_JOURNAL_DOI = "10.1088/0004-637x/746/1/85"
 
 
@@ -36,9 +40,12 @@ def _suzuki_evidence(spec: dict) -> list[dict]:
         for evidence in (insight or {}).get("evidence") or []:
             quote = ((evidence.get("quote") or {}).get("exact") or "").strip()
             if quote and _cites_suzuki(str(evidence.get("doi") or "")):
+                doi = str(evidence["doi"]).strip()
+                if doi.lower() == _SUZUKI_JOURNAL_DOI:
+                    doi = _SUZUKI_ARXIV_DOI
                 items.append(
                     {
-                        "doi": str(evidence["doi"]).strip(),
+                        "doi": doi,
                         "quote": quote,
                         "version": evidence.get("version"),
                     }
