@@ -1,0 +1,5 @@
+The Union2.1 Type Ia supernova compilation from the Supernova Cosmology Project is in `/root/sn-cosmology/data/` — `SCPUnion2.1_mu_vs_z.txt`, plus the two covariance matrices the SCP publishes alongside it, `SCPUnion2.1_covmat_nosys.txt` and `SCPUnion2.1_covmat_sys.txt`.
+
+Use it to measure the dark energy density: fit a flat ΛCDM model to the distance moduli for Omega_Lambda. Set the project up as an ASTRA analysis — I want an `astra.yaml` capturing the inputs, the outputs and the choices made along the way — and I want the constraint plus a two-panel Hubble diagram, distance modulus with the best-fit curve and residuals below.
+
+Then reproduce the constraint the paper that published this catalogue reports for these supernovae alone — Suzuki et al. 2012, arXiv 1105.3470 — and record their result in the spec too, with evidence. Get as close to their value *and* their uncertainty as you can, and tell me what you had to do to get there and where you still differ.
