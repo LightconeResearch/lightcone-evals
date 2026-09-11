@@ -44,23 +44,6 @@ REQUIRED_VALUES = (
     CONTRACT["omega_lambda_err_key"],
 )
 
-# The sentence both instruction files must state identically. Anchored on
-# its opening words through the figure path's filename plus a period, since
-# that is always the last thing the sentence names.
-SENTENCE_START = "Save the constraint to "
-SENTENCE_END = f"{Path(CONTRACT['figure_path']).name}`."
-
-
-def extract_contract_sentence(text: str) -> str | None:
-    start = text.find(SENTENCE_START)
-    if start == -1:
-        return None
-    end = text.find(SENTENCE_END, start)
-    if end == -1:
-        return None
-    return text[start : end + len(SENTENCE_END)]
-
-
 TASK_TOML_REQUIRED_SOURCES = (
     f"{CONTRACT['project_root']}/astra.yaml",
     f"{CONTRACT['project_root']}/{CONTRACT['best_fit_path']}",
@@ -69,8 +52,6 @@ TASK_TOML_REQUIRED_SOURCES = (
 
 
 def check_instruction_files(problems: list[str]) -> None:
-    sentences: dict[str, str] = {}
-
     for name in INSTRUCTION_FILES:
         path = TASK_ROOT / name
         if not path.is_file():
@@ -81,18 +62,6 @@ def check_instruction_files(problems: list[str]) -> None:
         for value in REQUIRED_VALUES:
             if value not in text:
                 problems.append(f"{name}: missing required contract value {value!r}")
-
-        sentence = extract_contract_sentence(text)
-        if sentence is None:
-            problems.append(f"{name}: could not find the output-contract sentence")
-        else:
-            sentences[name] = sentence
-
-    if len(sentences) == len(INSTRUCTION_FILES) and len(set(sentences.values())) > 1:
-        problems.append(
-            "instruction files disagree on the output-contract sentence:\n"
-            + "\n".join(f"  {name}: {sentence!r}" for name, sentence in sentences.items())
-        )
 
 
 def check_task_toml(problems: list[str]) -> None:

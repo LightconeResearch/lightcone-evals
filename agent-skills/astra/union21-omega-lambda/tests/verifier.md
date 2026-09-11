@@ -15,14 +15,13 @@ verifier:
         range: [0, 3]
         source: pytest
         weight_in_reward: 0.6
-        # The four numeric windows below restate tests/tolerances.json for
-        # readability. That file (and environment/project/contract.json for
-        # the paths/keys) is authoritative if the two ever disagree.
+        # The numeric windows live in tests/tolerances.json; they are not
+        # restated here.
         levels:
           0: "no working fit"
-          1: "recorded Omega_Lambda in [0.690, 0.735] AND a valid non-trivial Hubble diagram PNG"
-          2: "level 1, AND recorded 1-sigma in [0.025, 0.050] (systematics covariance found)"
-          3: "level 2, AND recorded Omega_Lambda in [0.697, 0.712] AND 1-sigma in [0.036, 0.046] on the same estimate (paper reproduced)"
+          1: "recorded Omega_Lambda in the level-1 window AND a valid non-trivial Hubble diagram PNG"
+          2: "level 1, AND recorded a 1-sigma in the level-2 window (systematics covariance found)"
+          3: "level 2, AND recorded Omega_Lambda and 1-sigma in the level-3 windows on the same estimate (paper reproduced)"
     astra_flags:
       astra_spec_valid:
         range: [0, 1]
@@ -32,15 +31,6 @@ verifier:
         range: [0, 1]
         source: pytest
         weight_in_reward: 0.2
-    diagnostic_only:
-      answer_found_elsewhere:
-        range: [0, 1]
-        source: script
-        reward_contribution: none
-      figure_depends_on_output:
-        range: [0, 1]
-        source: script
-        reward_contribution: none
   outputs:
     reward_text: /logs/verifier/reward.txt
     reward_json: /logs/verifier/reward.json
@@ -85,48 +75,28 @@ still separate "did the science" from "used ASTRA" by looking at
 `science_level` versus the two flags, without the combined `reward` hiding
 that distinction.
 
-`astra_spec_valid` checks that `astra.yaml` is schema- and
-semantically-valid and declares a data input, a metric output with a recipe,
-and a figure output with a recipe — nothing more. An earlier revision also
-required the figure to name the metric output as an upstream dependency
-(`inputs: [..., best_fit]`); that was a structural opinion the task itself
-never asked the agent for, and `astra validate` accepts a figure whose
-recipe computes the fit inline just as validly. It failed a Sonnet tier-C
-run and every Haiku tier-C run outright, which is what exposed it: the
-dimension was measuring a documentation-style preference, not spec
-validity, and confounding the whole plugin comparison in the process.
-Whether the figure does record that dependency is now the
-`figure_depends_on_output` diagnostic (`check_figure_dependency.py`) —
-worth knowing, since provenance structure is exactly what ASTRA is for,
-but not something the prompt asked for and therefore not something to
-penalize.
+`astra_spec_valid` checks that `astra.yaml` passes `astra validate` and
+declares a data input, a metric output, and a figure output — nothing more.
+The verdict comes from the CLI's exit code, not from re-reading its report.
 
-`astra_evidence_and_decisions` checks that at least one `prior_insight`
-concerning Suzuki et al.'s own Omega_Lambda constraint was verified as
-evidence, AND that the spec's `decisions:` block names both choices — the
-covariance decision with its systematics-inclusive option selected, and the
-magnitude-treatment decision with its marginalized option selected. Unlike
-the figure-dependency structure, both instruction files explicitly ask for
-this: "the choices made along the way" captured in the spec, and the
-paper's result "recorded in the spec too, with evidence." Which two choices
-are checked isn't an arbitrary pick either — they're the same two seeded
-defects `science_level` 2 and 3 are built around, so an agent that reaches
-level 3 has necessarily made exactly these decisions numerically; this
-dimension checks whether that same agent also *recorded* them in the spec,
-as asked.
+`astra_evidence_and_decisions` checks two things the prompt does ask for:
+that at least one evidence quote citing Suzuki et al. 2012 (by arXiv id or
+by the journal DOI, under `prior_insights` or under `findings` — `astra
+validate` verifies both identically) verifies against the cached paper, and
+that the spec records at least one decision whose `default` resolves to one
+of its own options. *Which* decisions the agent recorded is `science_level`'s
+question; requiring particular ones here would measure the science twice and
+confound the ablation the task exists to run. Accepted cost: a spec carrying one
+trivial but well-formed decision now passes that half of the flag.
 
-**Evidence: only the required claim's verification counts, not every
-citation the agent chose to add.** An earlier revision required *every*
-`prior_insight` in the spec to verify, which penalizes an agent for citing
-more than the prompt asked for — the same "does the prompt actually ask for
-this?" bug as the figure dependency, just on the evidence side. The prompt
-asks the agent to record the paper's own constraint with evidence; it does
-not ask for a fully-verified bibliography, and it does not forbid citing
-anything else. The check now finds the evidence id(s) whose DOI matches
-Suzuki et al. 2012 (`10.48550/arXiv.1105.3470` or its journal form
-`10.1088/0004-637X/746/1/85` — the same paper) and passes if *any* of those
-specific ids verify, regardless of whether some other, unrequested citation
-in the same spec failed.
+**Deliberate boundary: verdicts come from the CLI, spec *content* is read
+from YAML.** `astra validate` decides validity and `astra paper verify-quote`
+decides whether a quote is in the paper, so those two are invoked and their
+exit codes read rather than re-derived. Everything else this verifier needs
+to know about the spec (which output types are declared, whether a decision
+selects one of its options) is read straight from the YAML, because
+astra-tools 0.2.17 exposes no structured spec dump — `astra info --json`
+returns a rendered text blob.
 
 **Standing caveat on evidence verification in this environment.** The
 image only pre-caches the arXiv preprint DOI. `10.1088/0004-637X/746/1/85`
@@ -139,27 +109,30 @@ pre-cache will fail to verify that citation through no fault of its own
 reasoning; this is scoring our cache, not the agent, which is exactly why
 verification is scoped to "at least one" rather than "all."
 
-**Also worth knowing, not ours to fix:** `astra validate --verify-evidence`
-only checks evidence under `prior_insights`, never under `findings`. An
-agent that correctly records the paper comparison as a `finding` (with a
-perfectly good, cached DOI) gets no credit for it here — that's an
-ASTRA/CLI surface question, not this task's verifier's to work around, but
-worth knowing when reading a "0 verified" result: it can mean the content
-exists and is fine, just filed under the wrong top-level key.
+**What this verifier deliberately does not require.** Each of these was
+either a real scoring bug or an obvious temptation; the rule is that the
+verifier may only require what the instruction file actually asks for.
 
-**Decision matching: check the selected option's own text, not what other
-options omit.** An earlier version of the covariance/magnitude matchers
-required one option's text to include a hint AND a *different* option's
-text to exclude the same hint (to avoid double-counting). This broke on a
-perfectly good spec: a statistics-only option naturally described as
-"...ignoring systematic uncertainties" contains the word "systematic" while
-describing the *other* choice, so the exclusion fired on prose that was
-correctly written. The matchers now read only the decision's *selected*
-(`default`) option's own text for an affirmative signal — `"system"` or the
-`covmat_sys` filename for the covariance decision, `"margin"` for the
-magnitude decision — and never inspect the non-selected option's prose at
-all. The agent's own IDs and phrasing are still never dictated; only the
-winning option needs to say what it is.
+- A figure output naming the metric output as an upstream dependency — a
+  structural opinion the prompt never states; `test_astra_spec_valid.py`
+  carries the comment that keeps it out.
+- Recipe commands on the metric or figure outputs — the prompt asks for
+  inputs, outputs and choices, not executable provenance, and recipes are
+  optional in the schema.
+- Which particular scientific decisions are recorded (systematics
+  covariance, marginalized magnitude) — that is `science_level`'s
+  measurement, not this flag's.
+- Every citation verifying: only the required Suzuki claim has to verify, so
+  an extra, unfetchable citation the agent chose to add cannot sink the flag.
+- The non-selected option's prose: an earlier matcher excluded a decision
+  whose statistics-only option was correctly described as "ignoring
+  systematic uncertainties". Nothing now reads a rejected option's text.
+- The figure actually being two-panel, and the prompt's closing "tell me
+  what you had to do to get there and where you still differ" narrative.
+  Both instruction files ask for these and nothing scores them: decoding PNG
+  row bands would be fragile complexity for a structural proxy, and the
+  written account has no file the prompt names. Known gaps, stated here
+  rather than papered over.
 
 **The science rungs read a named output contract strictly, not a glob.** Both
 instruction files tell the agent exactly where to put the answer, in wording
@@ -184,30 +157,10 @@ kept out of the baked project deliberately — unlike the paths and keys, they
 are not disclosed in the prompt, and baking them in would leak the scoring
 thresholds to the agent.
 
-The looser glob+pattern search this task used to score with
-(`find_omega_lambda_estimates()` in `_util.py`) still exists, but purely as
-the `answer_found_elsewhere` diagnostic (`check_answer_elsewhere.py`, run
-directly by `test.sh`, not through pytest): it re-scans every JSON/YAML
-under the project (excluding `data/` and the spec) for anything matching
-those old key-pattern regexes, outside the named file. It never touches
-`science_level` or `reward`. Its purpose is purely diagnostic — telling "the
-agent couldn't do the physics" (`answer_found_elsewhere: 0`, `science_level:
-0`) apart from "the agent did the physics but filed it somewhere else"
-(`answer_found_elsewhere: 1`, `science_level: 0`) when reviewing failure
-modes. The specific location(s) found, if any, are written to
-`/logs/verifier/answer-elsewhere.txt` rather than into `reward.json`, since
-`lightcone-bench`'s `summarize.py` only keeps numeric keys from that file.
-
 ASTRA spec authoring is a different matter from the named output contract:
 the agent chooses astra.yaml's own paths, decision IDs, and option IDs, so
-`astra_spec_valid` and `astra_evidence_and_decisions` stay tolerant there —
-pattern-matching the *selected* option's own text for "system"/`covmat_sys`
-and "margin" rather than requiring specific IDs, and never requiring a
-particular output-to-output dependency shape. What's checked strictly for
-those two flags is the validation outcomes (`astra validate` must report
-full schema+semantic success; the required Suzuki citation, specifically,
-must verify) and that both decisions are present with the right option
-selected as default.
+`astra_spec_valid` and `astra_evidence_and_decisions` never require specific
+IDs, a particular output-to-output dependency shape, or particular decisions.
 
 Each level's pytest module checks only its own incremental condition — level
 2's module does not re-check level 1's fit, level 3's does not re-check
