@@ -15,13 +15,19 @@ set +e
 # its own key, so "did the science" and "used ASTRA" stay individually
 # legible even though they now combine into one number.
 #
-# answer_found_elsewhere is a third diagnostic-only flag: the science rungs
-# above read /root/sn-cosmology/results/best_fit.json strictly (the prompt
-# names that exact path and its keys), so a fit filed anywhere else scores
+# answer_found_elsewhere and figure_depends_on_output are diagnostic-only
+# flags, never scored. answer_found_elsewhere: the science rungs above read
+# /root/sn-cosmology/results/best_fit.json strictly (the prompt names that
+# exact path and its keys), so a fit filed anywhere else scores
 # science_level 0 — correctly, since the prompt asked for it plainly. This
 # flag re-runs the old glob+pattern search to tell "couldn't do the physics"
 # apart from "did the physics, filed it elsewhere" without letting that
-# search back into the score.
+# search back into the score. figure_depends_on_output: whether the figure
+# output names the metric output as an upstream dependency in astra.yaml.
+# Neither instruction file asks for that structure and astra validate
+# accepts a figure that computes the fit inline, so it isn't required for
+# astra_spec_valid — it's just interesting, since provenance structure is
+# what ASTRA is for.
 
 mkdir -p /logs/verifier
 
@@ -29,6 +35,7 @@ science_level=0
 astra_spec_valid=0
 astra_evidence_and_decisions=0
 answer_found_elsewhere=0
+figure_depends_on_output=0
 
 python3 -m pytest /tests/test_science_level_1_fit_and_figure.py -rA -v \
   > /logs/verifier/science-level-1.txt 2>&1
@@ -71,20 +78,13 @@ if [ "$rc" -eq 0 ]; then
 fi
 
 answer_found_elsewhere=$(python3 /tests/check_answer_elsewhere.py)
+figure_depends_on_output=$(python3 /tests/check_figure_dependency.py)
 
-# Collect the agent's actual work products for human review. /logs/verifier
-# is bind-mounted straight through to the run's artifacts (confirmed in
-# Harbor's source, harbor/trial/trial.py: it mounts verifier_dir directly,
-# no separate [verifier].collect or [[artifacts]] entry needed — those exist
-# for snapshot commands and extra non-verifier paths, not for files the
-# verifier itself already writes here), so anything copied below just shows
-# up in the trial's own directory. Paths come from contract.json, the same
-# single source of truth the science_level tests read.
-cp /root/sn-cosmology/astra.yaml /logs/verifier/astra.yaml 2>/dev/null || true
-best_fit_path=$(python3 -c "import json; print(json.load(open('/root/sn-cosmology/contract.json'))['best_fit_path'])" 2>/dev/null)
-figure_path=$(python3 -c "import json; print(json.load(open('/root/sn-cosmology/contract.json'))['figure_path'])" 2>/dev/null)
-cp "/root/sn-cosmology/$best_fit_path" /logs/verifier/best_fit.json 2>/dev/null || true
-cp "/root/sn-cosmology/$figure_path" /logs/verifier/hubble_diagram.png 2>/dev/null || true
+# Collecting the agent's astra.yaml, best_fit.json, and hubble_diagram.png
+# for human review is task.toml's top-level `artifacts` job (declarative
+# source -> destination entries, landing under
+# jobs/<ts>/<trial>/artifacts/), not this script's -- this file is scoring
+# only. See task.toml for why and where.
 
 # reward folds science_level (0.6) and the two ASTRA flags (0.2 each) into
 # one number, per instruction: instruction-following is what's being
@@ -93,7 +93,7 @@ cp "/root/sn-cosmology/$figure_path" /logs/verifier/hubble_diagram.png 2>/dev/nu
 # remain separately legible even though they combine into one score.
 reward=$(python3 -c "print(f'{0.6 * (${science_level} / 3) + 0.2 * ${astra_spec_valid} + 0.2 * ${astra_evidence_and_decisions}:.2f}')")
 printf '%s\n' "$reward" > /logs/verifier/reward.txt
-printf '{"reward": %s, "science_level": %d, "astra_spec_valid": %d, "astra_evidence_and_decisions": %d, "answer_found_elsewhere": %d}\n' \
-  "$reward" "$science_level" "$astra_spec_valid" "$astra_evidence_and_decisions" "$answer_found_elsewhere" \
+printf '{"reward": %s, "science_level": %d, "astra_spec_valid": %d, "astra_evidence_and_decisions": %d, "answer_found_elsewhere": %d, "figure_depends_on_output": %d}\n' \
+  "$reward" "$science_level" "$astra_spec_valid" "$astra_evidence_and_decisions" "$answer_found_elsewhere" "$figure_depends_on_output" \
   > /logs/verifier/reward.json
 exit 0

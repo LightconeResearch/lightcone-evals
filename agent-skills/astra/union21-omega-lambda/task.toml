@@ -2,7 +2,28 @@
 # everything under environment/, solution/, tests/ and instruction.md is plain
 # files a future base layer could reuse.
 schema_version = "1.4"
-artifacts = []
+
+# The agent's actual work products, for human review — landing under
+# jobs/<timestamp>/<trial>/artifacts/<destination> (harbor.trial.artifact_handler:
+# entries with an explicit destination land at that relative path; the source
+# is the absolute in-container path, collected from the agent's own container
+# since no `service` is set). Collection is best-effort per entry
+# (harbor.trial.artifact_handler._download_artifact wraps the download in a
+# try/except that returns status="failed" in manifest.json rather than
+# raising) and runs right after the agent/oracle phase, before the verifier —
+# so a missing file (a failing run that never wrote a figure) does not fail
+# the trial or turn a legitimate zero into an error; it is simply absent from
+# artifacts/ with a "failed" manifest entry.
+#
+# Source paths mirror environment/project/contract.json's project_root and
+# named result paths — task.toml can't import that JSON file at parse time
+# (same limitation as the instruction files), so check_contract_drift.py
+# validates these three entries against contract.json too.
+artifacts = [
+  { source = "/root/sn-cosmology/astra.yaml", destination = "astra.yaml" },
+  { source = "/root/sn-cosmology/results/best_fit.json", destination = "best_fit.json" },
+  { source = "/root/sn-cosmology/results/hubble_diagram.png", destination = "hubble_diagram.png" },
+]
 
 [task]
 name = "lightcone/union21-omega-lambda"

@@ -46,19 +46,17 @@ def test_spec_declares_a_metric_output_with_a_recipe() -> None:
     )
 
 
-def test_spec_declares_a_downstream_figure_output_with_a_recipe() -> None:
+def test_spec_declares_a_figure_output_with_a_recipe() -> None:
+    # Deliberately does NOT require the figure to depend on another declared
+    # output (e.g. the metric): neither instruction file asks for a
+    # particular dependency structure, and an agent computing the fit
+    # inline inside the figure's own recipe is a perfectly valid ASTRA spec
+    # that `astra validate` accepts. See check_figure_dependency.py for that
+    # structure recorded as a non-scoring diagnostic instead.
     spec = yaml.safe_load(SPEC_PATH.read_text())
     outputs = spec.get("outputs") or []
-    output_ids = {output["id"] for output in outputs if "id" in output}
     figures = [output for output in outputs if output.get("type") == "figure"]
     assert figures, "no figure output declared"
-
-    def depends_on_another_output(figure: dict) -> bool:
-        upstream = set(figure.get("inputs") or [])
-        return bool(upstream & (output_ids - {figure.get("id")}))
-
-    downstream = [figure for figure in figures if depends_on_another_output(figure)]
-    assert downstream, "no figure output depends on another declared output"
-    assert any((f.get("recipe") or {}).get("command") for f in downstream), (
-        "the downstream figure output declares no recipe command"
+    assert any((f.get("recipe") or {}).get("command") for f in figures), (
+        "no figure output declares a recipe command"
     )

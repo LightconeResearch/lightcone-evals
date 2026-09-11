@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
-"""Task-consistency check: do instruction.md and instruction-astra.md agree
-with contract.json, the single source of truth for the output contract?
+"""Task-consistency check: do instruction.md, instruction-astra.md, and
+task.toml's artifact list agree with contract.json, the single source of
+truth for the output contract?
 
 This is NOT part of the scored verifier and is deliberately not wired into
 tests/test.sh, because it cannot run there: Harbor only copies tests/ ->
 /tests and solution/ -> /solution into the environment container
 (see harbor/models/trial/paths.py and harbor/agents/oracle.py in the
-installed `harbor` package) -- instruction.md and instruction-astra.md live
-at the task root and are read by Harbor on the *host* to build the agent's
-prompt. They never land in any container, in either the oracle or the
-verifier phase, so a check that reads their prose has to run against a
-plain checkout instead. An agent must never be penalized for these files
-drifting, which is the other reason this stays outside test.sh: a failure
-here is a task-authoring bug, not a property of the agent's run.
+installed `harbor` package) -- instruction.md, instruction-astra.md, and
+task.toml all live at the task root and are read by Harbor on the *host* to
+build the agent's prompt and the trial's configuration. None of them ever
+land in any container, in either the oracle or the verifier phase, so a
+check that reads them has to run against a plain checkout instead. An agent
+must never be penalized for these files drifting, which is the other reason
+this stays outside test.sh: a failure here is a task-authoring bug, not a
+property of the agent's run.
 
-Run this after editing contract.json or either instruction file:
+task.toml is checked as plain text (substring search for the exact
+artifact-source strings), not parsed as TOML, so this script has no
+dependency beyond the standard library that predates Python 3.11's
+`tomllib` -- the system `python3` here is 3.9.
+
+Run this after editing contract.json, either instruction file, or
+task.toml's artifacts list:
     python3 check_contract_drift.py
 """
 
@@ -53,8 +61,14 @@ def extract_contract_sentence(text: str) -> str | None:
     return text[start : end + len(SENTENCE_END)]
 
 
-def main() -> int:
-    problems: list[str] = []
+TASK_TOML_REQUIRED_SOURCES = (
+    f"{CONTRACT['project_root']}/astra.yaml",
+    f"{CONTRACT['project_root']}/{CONTRACT['best_fit_path']}",
+    f"{CONTRACT['project_root']}/{CONTRACT['figure_path']}",
+)
+
+
+def check_instruction_files(problems: list[str]) -> None:
     sentences: dict[str, str] = {}
 
     for name in INSTRUCTION_FILES:
@@ -80,13 +94,30 @@ def main() -> int:
             + "\n".join(f"  {name}: {sentence!r}" for name, sentence in sentences.items())
         )
 
+
+def check_task_toml(problems: list[str]) -> None:
+    path = TASK_ROOT / "task.toml"
+    if not path.is_file():
+        problems.append("task.toml: file does not exist")
+        return
+    text = path.read_text(encoding="utf-8")
+    for source in TASK_TOML_REQUIRED_SOURCES:
+        if f'"{source}"' not in text:
+            problems.append(f"task.toml: no artifact entry with source {source!r}")
+
+
+def main() -> int:
+    problems: list[str] = []
+    check_instruction_files(problems)
+    check_task_toml(problems)
+
     if problems:
         print("CONTRACT DRIFT:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    print("OK: instruction.md and instruction-astra.md agree with contract.json")
+    print("OK: instruction.md, instruction-astra.md, and task.toml agree with contract.json")
     return 0
 
 

@@ -37,6 +37,10 @@ verifier:
         range: [0, 1]
         source: script
         reward_contribution: none
+      figure_depends_on_output:
+        range: [0, 1]
+        source: script
+        reward_contribution: none
   outputs:
     reward_text: /logs/verifier/reward.txt
     reward_json: /logs/verifier/reward.json
@@ -82,13 +86,35 @@ still separate "did the science" from "used ASTRA" by looking at
 that distinction.
 
 `astra_spec_valid` checks that `astra.yaml` is schema- and
-semantically-valid and declares a data input, a metric output, and a
-downstream figure output, each with a recipe command.
+semantically-valid and declares a data input, a metric output with a recipe,
+and a figure output with a recipe — nothing more. An earlier revision also
+required the figure to name the metric output as an upstream dependency
+(`inputs: [..., best_fit]`); that was a structural opinion the task itself
+never asked the agent for, and `astra validate` accepts a figure whose
+recipe computes the fit inline just as validly. It failed a Sonnet tier-C
+run and every Haiku tier-C run outright, which is what exposed it: the
+dimension was measuring a documentation-style preference, not spec
+validity, and confounding the whole plugin comparison in the process.
+Whether the figure does record that dependency is now the
+`figure_depends_on_output` diagnostic (`check_figure_dependency.py`) —
+worth knowing, since provenance structure is exactly what ASTRA is for,
+but not something the prompt asked for and therefore not something to
+penalize.
+
 `astra_evidence_and_decisions` checks that the paper's Omega_Lambda
 constraint was verified as evidence AND that the spec's `decisions:` block
 names both choices — the covariance decision with its systematics-inclusive
 option selected, and the magnitude-treatment decision with its marginalized
-option selected.
+option selected. Unlike the figure-dependency structure, both instruction
+files explicitly ask for this: "the choices made along the way" captured in
+the spec, and the paper's result "recorded in the spec too, with evidence."
+Which two choices are checked isn't an arbitrary pick either — they're the
+same two seeded defects `science_level` 2 and 3 are built around, so an
+agent that reaches level 3 has necessarily made exactly these decisions
+numerically; this dimension checks whether that same agent also *recorded*
+them in the spec, as asked. The word-stem hint matching ("system"/
+"statistic", "margin"/"fixed") is a detection-tolerance choice, not a
+content requirement — the agent's own IDs and phrasing are never dictated.
 
 **The science rungs read a named output contract strictly, not a glob.** Both
 instruction files tell the agent exactly where to put the answer, in wording
@@ -131,7 +157,8 @@ ASTRA spec authoring is a different matter from the named output contract:
 the agent chooses astra.yaml's own paths, decision IDs, and option IDs, so
 `astra_spec_valid` and `astra_evidence_and_decisions` stay tolerant there —
 pattern-matching option text for "systematic"/"statistical" and
-"marginalize"/"fixed" rather than requiring specific IDs. What's checked
+"marginalize"/"fixed" rather than requiring specific IDs, and never
+requiring a particular output-to-output dependency shape. What's checked
 strictly for those two flags is the validation outcomes (`astra validate`
 and `--verify-evidence` must both report full success) and that both
 decisions are present with the right option selected as default.
