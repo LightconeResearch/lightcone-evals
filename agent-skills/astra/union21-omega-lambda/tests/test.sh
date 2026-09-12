@@ -50,8 +50,11 @@ run_dimension evidence_verified /tests/test_astra.py
 
 scores=$(python3 /tests/score.py 2>/logs/verifier/score.txt)
 if [ -z "$scores" ]; then
+  # score.py itself broke. Fall back to an all-zero fragment, still reading the
+  # reference values from tests/reference.json rather than restating them here,
+  # so the one place they live stays the one place they live.
   cat /logs/verifier/score.txt
-  scores='{"omega_lambda": null, "omega_lambda_err": null, "omega_lambda_ref": 0.705, "omega_lambda_err_ref": 0.0415, "omega_lambda_score": 0.0, "omega_lambda_err_score": 0.0}'
+  scores=$(python3 -c 'import json; r = json.load(open("/tests/reference.json")); print(json.dumps({"omega_lambda": None, "omega_lambda_err": None, "omega_lambda_ref": r["omega_lambda_ref"], "omega_lambda_err_ref": r["omega_lambda_err_ref"], "omega_lambda_score": 0.0, "omega_lambda_err_score": 0.0}))')
 fi
 printf '%s\n' "$scores" | tee -a /logs/verifier/score.txt
 
