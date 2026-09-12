@@ -26,6 +26,7 @@ different matter: the agent chooses those, so `test_astra.py` stays tolerant the
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 
@@ -51,7 +52,19 @@ OMEGA_LAMBDA_ERR_LOG_WIDTH = _REFERENCE["omega_lambda_err_log_width"]
 
 
 def is_numeric(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """True for a real, finite number.
+
+    Non-finite values are excluded deliberately. Python's `json.loads` accepts
+    the bare tokens `NaN`, `Infinity` and `-Infinity`, which RFC 8259 does not,
+    and `json.dump` writes them straight back out — so a diverged fit writing
+    `{"omega_lambda": NaN}` would otherwise produce a `reward.json` that no
+    conforming JSON parser can read, and a NaN reward that silently poisons the
+    mean over a whole sweep. A NaN is not an answer; it scores 0 like any other
+    unusable value.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value)
 
 
 def read_named_best_fit() -> dict | None:
