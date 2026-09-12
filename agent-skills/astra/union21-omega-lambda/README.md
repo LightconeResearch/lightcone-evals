@@ -1,18 +1,18 @@
 # union21-omega-lambda
 
-One environment, one oracle, one verifier — two instruction files for a three-tier ASTRA-adoption ablation:
+The baseline tier of a three-tier ASTRA-adoption ablation:
 
-| tier | instruction file | skill installed | measures |
+| tier | task | skill installed | measures |
 |---|---|---|---|
-| A | `instruction.md` | no | does the agent do good science at all — never mentions ASTRA |
-| B | `instruction-astra.md` | no | does naming ASTRA without the skill help, hurt, or do nothing |
-| C | `instruction-astra.md` | yes | does the plugin make the difference |
+| A | `union21-omega-lambda` | no | does the agent do good science at all — the prompt never mentions ASTRA |
+| B | `union21-omega-lambda-astra` | no | does naming ASTRA without the skill help, hurt, or do nothing |
+| C | `union21-omega-lambda-astra` | yes | does the plugin make the difference |
 
-B and C are the same prompt; only `WITH_SKILLS` (in `lightcone-bench`'s `materialize.sh`) differs between them.
-That is why this is two instruction files rather than two tasks: duplicating the ~7 MB `data/` directory, the oracle, and the verifier to vary one markdown file would be the wrong axis to fork on.
-Which instruction file a given run uses is selected by `materialize.sh`'s `PROMPT_VARIANT` env var (see that script's header comment in `lightcone-bench`).
+Tiers A and B are sibling task directories, each with its own `instruction.md` and its own `task.toml`.
+They share one environment, one oracle and one verifier: the sibling's `environment/`, `tests/` and `solution/` are relative symlinks into this directory, so the ~7 MB `data/` directory is not duplicated.
+Tier C is tier B run with the skill installed (`harbor run -p agent-skills/astra/union21-omega-lambda-astra --skill <astra skill dir>`).
 
-`instruction-astra.md` names ASTRA and says the choices belong in the spec, but deliberately does not teach the format — no `prior_insights`, `decisions:`, recipe syntax, output types, or CLI commands.
+The sibling's prompt names ASTRA and says the choices belong in the spec, but deliberately does not teach the format — no `prior_insights`, `decisions:`, recipe syntax, output types, or CLI commands.
 Teaching the format is the skill's job; if the prompt taught it too, tiers B and C would converge and the ablation would measure nothing.
 
 The verifier is one script for all three tiers.
@@ -43,8 +43,8 @@ That second score is where this task's difficulty lives, because each of the two
 Only the reward is tier-dependent, because the prompts are:
 
 ```
-baseline (instruction.md)        reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score)
-astra    (instruction-astra.md)  reward = mean(the same three, spec_valid, evidence_verified)
+baseline (union21-omega-lambda)        reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score)
+astra    (union21-omega-lambda-astra)  reward = mean(the same three, spec_valid, evidence_verified)
 ```
 
 A prompt that never mentions ASTRA cannot be scored on ASTRA flags.
@@ -56,8 +56,8 @@ Harbor 0.22.0 parses `/logs/verifier/reward.json` as a flat map of name -> numbe
 Everything else — which prompt ran, the raw fitted values, the references — goes to a sibling `details.json`.
 
 The verifier learns which prompt ran from `task.toml`'s `[verifier.env] PROMPT_VARIANT`, never from the agent's artifacts.
-Whoever swaps the instruction file must also write that key — `materialize.sh`'s `PROMPT_VARIANT` block in `lightcone-bench` does, and so must any local sweep driver that copies the task dir itself.
-The committed default is `"baseline"`, correct for an unmaterialized task dir.
+Each task states its own variant there: this one states `"baseline"`, the sibling states `"astra"`.
+Nothing downstream selects it, because the task a run points at already fixes it.
 See `tests/verifier.md` for the full rubric rationale.
 
 ## Re-scoring finished trials
@@ -79,5 +79,5 @@ It needs the task image locally (`UNION21_IMAGE`, default `union21-env:v2`); bui
 
 `environment/project/contract.json` governs the project root, the two named result paths, and the two JSON key names.
 `tests/reference.json` governs the two published reference values and the log-width factor, and is deliberately kept out of the image, since baking the paper's answer into the agent's working directory would hand over the thing the task exists to make it derive.
-Run `python3 check_contract_drift.py` after editing an instruction file, `contract.json`, or `task.toml`.
+Run `python3 check_contract_drift.py` after editing either task's `instruction.md`, `contract.json`, or either `task.toml`; it checks both tasks.
 See that script's docstring for why it is not part of `test.sh`.

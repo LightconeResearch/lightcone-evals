@@ -15,8 +15,8 @@
 # earlier verifier-v2/ are left exactly as they were.
 #
 # The tier comes from the trial name, which encodes which prompt ran:
-# A__* was given instruction.md (baseline), BC__* was given
-# instruction-astra.md (astra). Export PROMPT_VARIANT to override.
+# A__* ran union21-omega-lambda (baseline), BC__* ran
+# union21-omega-lambda-astra (astra). Export PROMPT_VARIANT to override.
 #
 # Requires the task image to exist locally; build it with
 #   docker build -t union21-env:v2 environment/

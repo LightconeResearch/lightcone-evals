@@ -20,27 +20,27 @@ verifier:
         range: [0, 1]
         kind: binary
         source: pytest
-        licensed_by: [instruction.md, instruction-astra.md]
+        licensed_by: [union21-omega-lambda, union21-omega-lambda-astra]
       omega_lambda_score:
         range: [0, 1]
         kind: continuous
         source: score.py
-        licensed_by: [instruction.md, instruction-astra.md]
+        licensed_by: [union21-omega-lambda, union21-omega-lambda-astra]
       omega_lambda_err_score:
         range: [0, 1]
         kind: continuous
         source: score.py
-        licensed_by: [instruction.md, instruction-astra.md]
+        licensed_by: [union21-omega-lambda, union21-omega-lambda-astra]
       spec_valid:
         range: [0, 1]
         kind: binary
         source: pytest
-        licensed_by: [instruction-astra.md]
+        licensed_by: [union21-omega-lambda-astra]
       evidence_verified:
         range: [0, 1]
         kind: binary
         source: pytest
-        licensed_by: [instruction-astra.md]
+        licensed_by: [union21-omega-lambda-astra]
   outputs:
     reward_text: /logs/verifier/reward.txt
     reward_json: /logs/verifier/reward.json
@@ -57,7 +57,7 @@ The obvious covariance file to reach for is the statistics-only one; the paper u
 And the supernova absolute magnitude is a nuisance parameter that must be marginalized over rather than held fixed.
 Each omission leaves Ω_Λ roughly right and its **uncertainty** far too small — which is why the uncertainty, not the central value, is where this task's difficulty actually lives.
 
-One tier of the ablation (`instruction-astra.md`) additionally asks the agent to record the work as an `astra.yaml`: the inputs, the outputs, the choices made along the way, and the paper's constraint recorded as evidence.
+The sibling task `union21-omega-lambda-astra` carries a prompt that additionally asks the agent to record the work as an `astra.yaml`: the inputs, the outputs, the choices made along the way, and the paper's constraint recorded as evidence.
 
 ## the five dimensions
 
@@ -150,8 +150,8 @@ Deliberately *not* `astra validate --verify-evidence`: that call is all-or-nothi
 ## reward
 
 ```
-baseline (instruction.md)        reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score)
-astra    (instruction-astra.md)  reward = mean(the same three, spec_valid, evidence_verified)
+baseline (union21-omega-lambda)        reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score)
+astra    (union21-omega-lambda-astra)  reward = mean(the same three, spec_valid, evidence_verified)
 ```
 
 Rounded to two decimals.
@@ -189,7 +189,8 @@ So the verifier writes two files.
 
 One verifier serves all three tiers of the ablation (no ASTRA / ASTRA named / ASTRA named + plugin).
 It learns which prompt ran from `task.toml`'s `[verifier.env] PROMPT_VARIANT`, which Harbor passes into the verifier as a real environment variable.
-That key is written by the same step that swaps the instruction file — `materialize.sh`'s `PROMPT_VARIANT` block in `lightcone-bench`, or the local sweep driver — and the committed default is `"baseline"`, which is correct for an unmaterialized task dir whose `instruction.md` *is* the baseline prompt.
+Each task states its own variant there: `union21-omega-lambda` states `"baseline"`, `union21-omega-lambda-astra` states `"astra"`.
+Nothing downstream selects the variant, because the task a run points at already fixes it.
 An unrecognised value is a hard error rather than a silently-chosen formula, and `details.json` echoes the variant the verifier saw, so a mis-plumbed run is visible rather than merely mis-scored.
 
 The verifier never infers the tier from the agent's artifacts.

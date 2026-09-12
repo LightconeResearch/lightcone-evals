@@ -16,10 +16,9 @@ set +e
 # The two continuous scores cannot be pytest verdicts (pytest is pass/fail),
 # so they come from /tests/score.py, which prints them as JSON.
 #
-# PROMPT_VARIANT arrives from task.toml's [verifier.env], written by the same
-# step that swapped in the instruction file — never inferred from the agent's
-# artifacts, which would score the agent's behaviour to decide how to score
-# the agent's behaviour.
+# PROMPT_VARIANT arrives from task.toml's [verifier.env]; each task states its
+# own variant there — never inferred from the agent's artifacts, which would
+# score the agent's behaviour to decide how to score the agent's behaviour.
 #
 # Harbor 0.22.0 parses /logs/verifier/reward.json as a flat map of
 # name -> number and raises a pydantic ValidationError on any string or null
