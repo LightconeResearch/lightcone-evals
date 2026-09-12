@@ -208,6 +208,10 @@ The image only pre-caches the arXiv preprint DOI.
 `10.1088/0004-637X/746/1/85` (Suzuki's own journal DOI) and both Planck DOIs seen in practice (`10.1051/0004-6361/201833910`, `10.1051/0004-6361/201321529`) are behind a publisher paywall/CAPTCHA and genuinely unfetchable via `astra paper add` — confirmed by trying them with live network access, not inferred.
 An agent that cites the canonical published DOI over the arXiv preprint we happen to pre-cache would fail to verify that citation through no fault of its own reasoning; this is scoring our cache, not the agent, which is why the journal DOI is remapped and why verification is scoped to "at least one" rather than "all".
 
+The evidence item's `version` field is not forwarded to `verify-quote` either.
+The image caches one copy of the paper, and astra-tools keys a versioned lookup separately, so a legitimate `version: 1` citation would report "Paper not in cache" against that copy.
+That would again score the cache rather than the agent.
+
 ## deliberate omissions
 
 The rule is that the verifier may only require what the instruction file actually asks for.

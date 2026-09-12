@@ -77,7 +77,7 @@ def _suzuki_evidence(spec: dict) -> list[dict]:
             if quote and (_SUZUKI_ARXIV_ID in doi.lower() or doi.lower() == _SUZUKI_JOURNAL_DOI):
                 if doi.lower() == _SUZUKI_JOURNAL_DOI:
                     doi = _SUZUKI_ARXIV_DOI
-                items.append({"doi": doi, "quote": quote, "version": evidence.get("version")})
+                items.append({"doi": doi, "quote": quote})
     return items
 
 
@@ -101,9 +101,12 @@ def test_evidence_verified() -> None:
 
     reports = []
     for item in candidates:
+        # The evidence item's `version` is deliberately not forwarded as `-v`:
+        # the image pre-caches one copy of the paper (environment/Dockerfile)
+        # and astra-tools keys versioned lookups separately, so `-v 1` for a
+        # legitimate arXiv-v1 citation reports "Paper not in cache" against
+        # that copy. That would score the cache, not the agent.
         command = ["astra", "paper", "verify-quote", item["doi"], "-q", item["quote"]]
-        if item["version"] is not None:
-            command += ["-v", str(item["version"])]
         result = subprocess.run(
             [*command, "--json"], cwd=PROJECT, text=True, capture_output=True, check=False
         )
