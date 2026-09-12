@@ -8,13 +8,12 @@ verifier:
       type: script
       command: ./test.sh
   rubric:
-    combine: tier_dependent_mean
-    reward_formula:
-      baseline: "mean(deliverables, omega_lambda_score, omega_lambda_err_score)"
-      astra: "mean(deliverables, omega_lambda_score, omega_lambda_err_score, spec_valid, evidence_verified)"
-    # Every dimension is measured and reported on every tier; only the reward
-    # formula is tier-dependent. The reference values the two continuous
-    # scores are measured against live in tests/reference.json.
+    combine: mean
+    reward_formula: "mean(deliverables, omega_lambda_score, omega_lambda_err_score, spec_valid, evidence_verified)"
+    # One formula for every task. The baseline task's prompt never asks for
+    # ASTRA, so its last two dimensions are measured 0 and its reward is
+    # capped at 0.60. The reference values the two continuous scores are
+    # measured against live in tests/reference.json.
     dimensions:
       deliverables:
         range: [0, 1]
@@ -150,22 +149,20 @@ Deliberately *not* `astra validate --verify-evidence`: that call is all-or-nothi
 ## reward
 
 ```
-baseline (union21-omega-lambda)        reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score)
-astra    (union21-omega-lambda-astra)  reward = mean(the same three, spec_valid, evidence_verified)
+reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score, spec_valid, evidence_verified)
 ```
 
 Rounded to two decimals.
-All five dimensions are reported on every tier, so "did the science" stays legible from "used ASTRA" — under the baseline tier the two ASTRA flags carry their real measured values (usually 0) while contributing nothing to reward.
+One formula, every task, every tier.
 
-**Reward is tier-dependent because the prompts are.**
-A prompt that never mentions ASTRA cannot be scored on ASTRA flags.
-A weak spec can therefore pull a tier-B/C run below an otherwise-identical tier-A run.
-That is intended: scores are comparable *within* a prompt, never across prompts.
+`union21-omega-lambda`'s prompt never asks for ASTRA, so `spec_valid` and `evidence_verified` are measured 0 there and its reward is capped at 0.60 by construction.
+That cap is the point rather than a flaw: it is the size of the gap that adopting ASTRA is being asked to close, and the two flags still carry their real measured values, so an unprompted agent that reaches for ASTRA anyway shows up as exactly that.
+Compare rewards within a task, not across tasks.
 
 ## the two output files, and why there are two
 
 Harbor 0.22.0 parses `/logs/verifier/reward.json` as a flat map of name → number (`VerifierResult.rewards: dict[str, float | int]`) and raises a pydantic `ValidationError` on any string or null value.
-A single string in that map is enough to sink a trial: one written with `"prompt_variant": "astra"` recorded a perfectly good reward of 1.00 in `reward.json` alongside an `exception_info` in `result.json` saying `unable to parse string as an integer, input_value='astra'`.
+A single string in that map is enough to sink a trial: one carrying a string label alongside the numbers recorded a perfectly good reward of 1.00 in `reward.json` and an `exception_info` in `result.json` saying `unable to parse string as an integer`.
 
 So the verifier writes two files.
 
@@ -179,7 +176,7 @@ So the verifier writes two files.
 `/logs/verifier/details.json` — everything non-numeric or contextual, collected by Harbor as an ordinary verifier log:
 
 ```json
-{"prompt_variant": "astra", "omega_lambda": 0.7047, "omega_lambda_err": 0.0412,
+{"omega_lambda": 0.7047, "omega_lambda_err": 0.0412,
  "omega_lambda_ref": 0.705, "omega_lambda_err_ref": 0.0415}
 ```
 
@@ -187,14 +184,14 @@ So the verifier writes two files.
 
 ## tier mechanism
 
-One verifier serves all three tiers of the ablation (no ASTRA / ASTRA named / ASTRA named + plugin).
-It learns which prompt ran from `task.toml`'s `[verifier.env] PROMPT_VARIANT`, which Harbor passes into the verifier as a real environment variable.
-Each task states its own variant there: `union21-omega-lambda` states `"baseline"`, `union21-omega-lambda-astra` states `"astra"`.
-Nothing downstream selects the variant, because the task a run points at already fixes it.
-An unrecognised value is a hard error rather than a silently-chosen formula, and `details.json` echoes the variant the verifier saw, so a mis-plumbed run is visible rather than merely mis-scored.
+There isn't one.
 
-The verifier never infers the tier from the agent's artifacts.
-"Does an `astra.yaml` exist" would score the agent's behaviour in order to decide how to score the agent's behaviour: tier A's rubric would flip the moment an unprompted agent reached for ASTRA, which is precisely the signal the ablation exists to measure.
+One verifier serves all three tiers of the ablation (no ASTRA / ASTRA named / ASTRA named + plugin) with one rubric and one formula, so there is no tier to plumb in and nothing to keep in step with which prompt ran.
+
+That is also the safe design.
+A verifier that adapted its rubric to the run would have to learn the tier from somewhere, and the tempting source is the agent's own artifacts — "does an `astra.yaml` exist".
+That would score the agent's behaviour in order to decide how to score the agent's behaviour: the baseline rubric would flip the moment an unprompted agent reached for ASTRA, which is precisely the signal the ablation exists to measure.
+A fixed rubric cannot do that.
 
 ## the continuous scores are not pytest tests
 

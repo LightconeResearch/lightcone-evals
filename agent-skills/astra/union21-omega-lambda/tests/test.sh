@@ -1,10 +1,15 @@
 #!/bin/bash
 set +e
 
-# v3: one binary floor, two continuous science scores, two binary ASTRA
-# flags. All five are measured and reported on every tier; only the REWARD
-# formula is tier-dependent, because a prompt that never mentions ASTRA
-# cannot be scored on ASTRA flags.
+# One binary floor, two continuous science scores, two binary ASTRA flags.
+# All five are measured, reported, and graded identically for every task:
+#
+#   reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score,
+#                 spec_valid, evidence_verified)
+#
+# The baseline task's prompt never asks for ASTRA, so its spec_valid and
+# evidence_verified are measured 0 and its reward is capped at 0.60 by
+# construction. Compare rewards within a task, not across tasks.
 #
 #   deliverables            0/1  the named best_fit.json has both numeric
 #                                values AND the named PNG exists and decodes
@@ -16,23 +21,14 @@ set +e
 # The two continuous scores cannot be pytest verdicts (pytest is pass/fail),
 # so they come from /tests/score.py, which prints them as JSON.
 #
-# PROMPT_VARIANT arrives from task.toml's [verifier.env]; each task states its
-# own variant there — never inferred from the agent's artifacts, which would
-# score the agent's behaviour to decide how to score the agent's behaviour.
-#
+
 # Harbor 0.22.0 parses /logs/verifier/reward.json as a flat map of
 # name -> number and raises a pydantic ValidationError on any string or null
-# value. So reward.json carries NUMBERS ONLY; everything non-numeric (which
-# prompt ran, the raw fitted values) goes to the sibling details.json, which
-# Harbor collects as an ordinary verifier log.
+# value. So reward.json carries NUMBERS ONLY; the raw fitted values, which
+# are null when the agent produced nothing readable, go to the sibling
+# details.json, which Harbor collects as an ordinary verifier log.
 
 mkdir -p /logs/verifier
-
-variant="${PROMPT_VARIANT:-baseline}"
-case "$variant" in
-  baseline|astra) ;;
-  *) echo "unknown PROMPT_VARIANT '$variant'" >&2; exit 1 ;;
-esac
 
 # Runs one binary dimension's pytest selection, echoes its log to the
 # verifier's stdout, and assigns 1/0 to the shell variable named after it.
@@ -64,7 +60,6 @@ printf '%s\n' "$scores" | tee -a /logs/verifier/score.txt
 # only. See task.toml for why and where.
 
 SCORES="$scores" \
-VARIANT="$variant" \
 DELIVERABLES="$deliverables" \
 SPEC_VALID="$spec_valid" \
 EVIDENCE_VERIFIED="$evidence_verified" \
@@ -72,13 +67,17 @@ python3 - <<'PY'
 import json, os
 
 scores = json.loads(os.environ["SCORES"])
-variant = os.environ["VARIANT"]
 deliverables = int(os.environ["DELIVERABLES"])
 spec_valid = int(os.environ["SPEC_VALID"])
 evidence_verified = int(os.environ["EVIDENCE_VERIFIED"])
 
-science = [deliverables, scores["omega_lambda_score"], scores["omega_lambda_err_score"]]
-graded = science if variant == "baseline" else science + [spec_valid, evidence_verified]
+graded = [
+    deliverables,
+    scores["omega_lambda_score"],
+    scores["omega_lambda_err_score"],
+    spec_valid,
+    evidence_verified,
+]
 reward = round(sum(graded) / len(graded), 2)
 
 with open("/logs/verifier/reward.json", "w") as handle:
@@ -98,7 +97,6 @@ with open("/logs/verifier/reward.json", "w") as handle:
 with open("/logs/verifier/details.json", "w") as handle:
     json.dump(
         {
-            "prompt_variant": variant,
             "omega_lambda": scores["omega_lambda"],
             "omega_lambda_err": scores["omega_lambda_err"],
             "omega_lambda_ref": scores["omega_lambda_ref"],

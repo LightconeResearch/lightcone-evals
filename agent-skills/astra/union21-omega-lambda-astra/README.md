@@ -3,7 +3,9 @@
 The ASTRA-prompt tier of `union21-omega-lambda`.
 
 Everything except the prompt is shared with the sibling task: `environment/`, `tests/` and `solution/` are relative symlinks into `../union21-omega-lambda/`, so there is one environment, one oracle and one verifier across both tasks.
-What differs is this task's own `instruction.md`, which names ASTRA and says the choices belong in the spec, and its own `task.toml`, which states `[verifier.env] PROMPT_VARIANT = "astra"` and so selects the reward formula that also grades `spec_valid` and `evidence_verified`.
+What differs is this task's own `instruction.md`, which names ASTRA and says the choices belong in the spec.
+The verifier grades every task by the same formula — `mean(deliverables, omega_lambda_score, omega_lambda_err_score, spec_valid, evidence_verified)` — so nothing else needs to differ: this prompt is simply the one that makes the last two dimensions reachable.
+The baseline task's reward is capped at 0.60 by construction; compare rewards within a task, not across tasks.
 
 The instruction deliberately does not teach the ASTRA format — no `prior_insights`, `decisions:`, recipe syntax, output types, or CLI commands.
 Teaching the format is the skill's job.

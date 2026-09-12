@@ -15,7 +15,7 @@ Tier C is tier B run with the skill installed (`harbor run -p agent-skills/astra
 The sibling's prompt names ASTRA and says the choices belong in the spec, but deliberately does not teach the format — no `prior_insights`, `decisions:`, recipe syntax, output types, or CLI commands.
 Teaching the format is the skill's job; if the prompt taught it too, tiers B and C would converge and the ablation would measure nothing.
 
-The verifier is one script for all three tiers.
+The verifier is one script, one rubric and one formula for all three tiers.
 It scores five dimensions — one binary floor, two continuous science scores, and two binary ASTRA flags — and reports all five on every tier, so "did the science" stays legible from "used ASTRA".
 
 | dimension | range | what it measures |
@@ -40,24 +40,22 @@ That second score is where this task's difficulty lives, because each of the two
 | systematics covariance, magnitude fixed | ~0.030 | 0.63 |
 | systematics covariance, magnitude marginalized (the paper) | ~0.041 | 1.00 |
 
-Only the reward is tier-dependent, because the prompts are:
+The reward is the mean of all five, for every task:
 
 ```
-baseline (union21-omega-lambda)        reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score)
-astra    (union21-omega-lambda-astra)  reward = mean(the same three, spec_valid, evidence_verified)
+reward = mean(deliverables, omega_lambda_score, omega_lambda_err_score, spec_valid, evidence_verified)
 ```
 
-A prompt that never mentions ASTRA cannot be scored on ASTRA flags.
-Under tier A those two flags carry their real measured values (usually 0 — that is the activation measurement the ablation exists to produce) while contributing nothing to reward.
-A weak spec can pull a tier-B/C run below an otherwise-identical tier-A run: rewards are comparable *within* a prompt, never across prompts.
+This task's prompt never asks for ASTRA, so `spec_valid` and `evidence_verified` are measured 0 here and **its reward is capped at 0.60 by construction**.
+That cap is the size of the gap adopting ASTRA is being asked to close.
+The two flags still carry their real measured values, so an unprompted agent that reaches for ASTRA anyway — the activation measurement the ablation exists to produce — shows up as exactly that.
+Compare rewards *within* a task, never across tasks.
 
 The verifier writes two files, not one.
 Harbor 0.22.0 parses `/logs/verifier/reward.json` as a flat map of name -> number and raises a pydantic `ValidationError` on any string or null value, so `reward.json` carries numbers only.
 Everything else — which prompt ran, the raw fitted values, the references — goes to a sibling `details.json`.
 
-The verifier learns which prompt ran from `task.toml`'s `[verifier.env] PROMPT_VARIANT`, never from the agent's artifacts.
-Each task states its own variant there: this one states `"baseline"`, the sibling states `"astra"`.
-Nothing downstream selects it, because the task a run points at already fixes it.
+Because the formula is fixed, the verifier never has to learn which prompt ran, and in particular never infers it from the agent's artifacts — a rubric that flipped on "does an `astra.yaml` exist" would score the agent's behaviour in order to decide how to score the agent's behaviour.
 See `tests/verifier.md` for the full rubric rationale.
 
 ## Re-scoring finished trials
@@ -72,7 +70,7 @@ find jobs -maxdepth 3 -mindepth 3 -type d -print0 | xargs -0 scripts/rescore.sh
 
 Results land in `<trial_dir>/verifier-v3/`; nothing already in the trial dir is touched, so Harbor's own `verifier/` collection from the live run stays as it was.
 One summary line per trial goes to stdout.
-The tier comes from the trial name (`A__*` = baseline, `BC__*` = astra); export `PROMPT_VARIANT` to override.
+Every trial is graded by the same formula, so no tier has to be supplied; the trial-name prefix (`A__*`, `BC__*`) only labels the summary line.
 It needs the task image locally (`UNION21_IMAGE`, default `union21-env:v2`); build it with `docker build -t union21-env:v2 environment/`.
 
 ## Single sources of truth

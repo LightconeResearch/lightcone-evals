@@ -31,15 +31,6 @@ difficulty = "medium"
 timeout_sec = 420.0
 collect = []
 
-[verifier.env]
-# Which prompt this task carries: "baseline" = an instruction.md that never
-# mentions ASTRA. This is a property of the task, stated here, and never
-# inferred from the agent's artifacts. Harbor passes [verifier.env] through to
-# the verifier as real environment variables, where tests/test.sh reads it to
-# pick the reward formula. The sibling task union21-omega-lambda-astra states
-# "astra".
-PROMPT_VARIANT = "baseline"
-
 [agent]
 timeout_sec = 1200.0
 

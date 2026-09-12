@@ -14,9 +14,9 @@
 # is touched: verifier/ (Harbor's own collection from the live run) and any
 # earlier verifier-v2/ are left exactly as they were.
 #
-# The tier comes from the trial name, which encodes which prompt ran:
-# A__* ran union21-omega-lambda (baseline), BC__* ran
-# union21-omega-lambda-astra (astra). Export PROMPT_VARIANT to override.
+# The verifier grades every trial with the same formula, so no tier has to be
+# plumbed in. The trial-name prefix (A__* ran union21-omega-lambda, BC__* ran
+# union21-omega-lambda-astra) is used only to label the summary line.
 #
 # Requires the task image to exist locally; build it with
 #   docker build -t union21-env:v2 environment/
@@ -54,16 +54,10 @@ for trial_dir in "$@"; do
     continue
   fi
 
-  case "${PROMPT_VARIANT:-}" in
-    baseline|astra) variant="$PROMPT_VARIANT" ;;
-    "")
-      case "$trial" in
-        A__*)  variant=baseline ;;
-        BC__*) variant=astra ;;
-        *) echo "SKIP  $trial_dir  (trial name encodes no tier; set PROMPT_VARIANT)" >&2
-           failures=$((failures + 1)); continue ;;
-      esac ;;
-    *) echo "unknown PROMPT_VARIANT '$PROMPT_VARIANT'" >&2; exit 2 ;;
+  case "$trial" in
+    A__*)  label=baseline ;;
+    BC__*) label=astra ;;
+    *)     label=unlabelled ;;
   esac
 
   out_dir="$trial_dir/verifier-v3"
@@ -71,7 +65,6 @@ for trial_dir in "$@"; do
   mkdir -p "$out_dir"
 
   docker run --rm \
-    -e PROMPT_VARIANT="$variant" \
     -v "$TASK_ROOT/tests":/tests:ro \
     -v "$(cd "$trial_dir/artifacts" && pwd)":/artifacts:ro \
     -v "$(cd "$out_dir" && pwd)":/out \
@@ -92,15 +85,15 @@ for trial_dir in "$@"; do
     continue
   fi
 
-  python3 - "$trial_dir" "$out_dir" <<'PY'
+  python3 - "$trial_dir" "$out_dir" "$label" <<'PY'
 import json, sys
-trial_dir, out_dir = sys.argv[1], sys.argv[2]
+trial_dir, out_dir, label = sys.argv[1], sys.argv[2], sys.argv[3]
 reward = json.load(open(f"{out_dir}/reward.json"))
 details = json.load(open(f"{out_dir}/details.json"))
 sigma = details["omega_lambda_err"]
 omega = details["omega_lambda"]
 print(
-    f"{reward['reward']:>5.2f}  {details['prompt_variant']:<8} "
+    f"{reward['reward']:>5.2f}  {label:<11} "
     f"deliv={reward['deliverables']} "
     f"oL={reward['omega_lambda_score']:.2f} err={reward['omega_lambda_err_score']:.2f} "
     f"spec={reward['spec_valid']} ev={reward['evidence_verified']}  "
