@@ -1,0 +1,57 @@
+# Harbor task manifest (schema 1.4). This file is the Harbor-specific wrapper —
+# everything under environment/, solution/, tests/ and instruction.md is plain
+# files a future base layer could reuse.
+schema_version = "1.4"
+
+# The agent's actual work products, collected for human review under
+# jobs/<timestamp>/<trial>/artifacts/<destination>. Collection is best-effort
+# per entry, so a missing file (a run that never wrote a figure) does not fail
+# the trial; check_contract_drift.py keeps these sources in step with
+# environment/project/contract.json.
+artifacts = [
+  { source = "/root/sn-cosmology/astra.yaml", destination = "astra.yaml" },
+  { source = "/root/sn-cosmology/results/best_fit.json", destination = "best_fit.json" },
+  { source = "/root/sn-cosmology/results/hubble_diagram.png", destination = "hubble_diagram.png" },
+]
+
+[task]
+name = "lightcone/union21-omega-lambda-astra"
+version = "1.0.0"
+description = "The ASTRA-prompt tier of union21-omega-lambda: the agent must fit a flat-LCDM model to the Union2.1 supernova compilation for Omega_Lambda and reproduce Suzuki et al. 2012's own published constraint, which requires discovering two seeded defects (the systematics covariance matrix, and analytically marginalizing over the SN absolute magnitude), and the prompt names ASTRA, so the run is additionally scored on authoring an astra.yaml recording both defects as decisions with the paper's constraint verified as evidence."
+keywords = ["astra", "cosmology", "supernovae", "spec-authoring", "evidence"]
+[[task.authors]]
+name = "cailmdaley"
+email = "cailmdaley@gmail.com"
+
+[metadata]
+category = "natural-science"
+difficulty = "medium"
+
+[verifier]
+timeout_sec = 420.0
+collect = []
+
+[verifier.env]
+# Which prompt this task carries: "astra" = an instruction.md that names ASTRA.
+# This is a property of the task, stated here, and never inferred from the
+# agent's artifacts. Harbor passes [verifier.env] through to the verifier as
+# real environment variables, where tests/test.sh reads it to pick the reward
+# formula. The sibling task union21-omega-lambda states "baseline".
+PROMPT_VARIANT = "astra"
+
+[agent]
+timeout_sec = 1200.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 1800.0
+os = "linux"
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]
