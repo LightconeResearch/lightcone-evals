@@ -47,7 +47,7 @@ verifier:
     details_json: /logs/verifier/details.json
 ---
 
-## what the task asks for
+## the task
 
 An agent is dropped into `/root/sn-cosmology` with the Union2.1 supernova compilation (Suzuki et al. 2012) — distance moduli, a statistics-only covariance matrix, and a systematics-inclusive one.
 It is asked to fit a spatially flat ΛCDM model for the dark-energy density Ω_Λ, write the answer and its uncertainty to `results/best_fit.json` under the keys `omega_lambda` and `omega_lambda_err`, draw a Hubble diagram to `results/hubble_diagram.png`, and reproduce the paper's own published constraint.
@@ -59,9 +59,8 @@ Each omission leaves Ω_Λ roughly right and its **uncertainty** far too small �
 
 One tier of the ablation (`instruction-astra.md`) additionally asks the agent to record the work as an `astra.yaml`: the inputs, the outputs, the choices made along the way, and the paper's constraint recorded as evidence.
 
-## the shape of v3
+## the five dimensions
 
-Five dimensions.
 One binary floor, two continuous science scores, two binary ASTRA flags.
 
 | dimension | range | what it measures |
@@ -74,13 +73,11 @@ One binary floor, two continuous science scores, two binary ASTRA flags.
 
 Two standing rules govern all five: **the verifier may only require what the prompt actually asks for**, and **call other code's checks rather than re-implementing them**.
 
-### why continuous
+### the science is scored as a distance, not as a window
 
-v2 scored the science with three nested 0/1 dimensions — `fit_and_figure`, `systematics_covariance`, `paper_reproduced` — each a pass/fail window on the same two numbers.
-They were redundant (any run inside the paper windows was inside the other two by construction) and they threw away the thing that is actually interesting: *how far off* a run was.
-A σ of 0.024 and a σ of 0.0005 both scored 0 under v2's `systematics_covariance` window, though one is a near-miss and the other is a different kind of error entirely.
+The two numbers this task produces are numbers, and what is interesting about a run is *how far off* it was.
+A pass/fail window on σ scores a near-miss at 0.024 exactly the same as a 0.0005 that is a different kind of error entirely, and that distinction is most of the signal the task exists to produce.
 
-These are all just numbers.
 One thing can reasonably be binary — does the best-fit file exist, does the PNG exist — and that is the floor.
 Everything above the floor is a distance, scored as a distance.
 
@@ -88,7 +85,7 @@ Everything above the floor is a distance, scored as a distance.
 
 1 if and only if:
 
-- the named `results/best_fit.json` exists, parses as a JSON object, and carries both `omega_lambda` and `omega_lambda_err` as numbers (not strings, not booleans, not null), **and**
+- the named `results/best_fit.json` exists, parses as a JSON object, and carries both `omega_lambda` and `omega_lambda_err` as finite numbers (not strings, not booleans, not null, and not `NaN` or `Infinity` — which Python's JSON reader accepts and no conforming one does), **and**
 - the named `results/hubble_diagram.png` exists, is larger than 10 kB, starts with the PNG magic bytes, and decodes to a non-empty image array.
 
 The 10 kB floor and the decode are there to reject a zero-byte placeholder or a truncated write, not to judge the figure's content.
@@ -140,7 +137,7 @@ A missing, non-numeric, or non-positive σ scores 0 — a non-positive number ha
 
 ### `spec_valid` and `evidence_verified` — astra-tools verdicts
 
-Unchanged from v2, and both binary because the tools they call are.
+Both binary, because the tools they call are.
 Every ASTRA-side check is a call into the pinned `astra-tools==0.2.17` CLI in the image, read from its exit code; nothing is re-derived from parsed YAML.
 
 - `spec_valid` — `astra validate <spec>` exits 0, plus exactly the prompt's three nouns ("an `astra.yaml` capturing the inputs, the outputs and the choices made along the way"): `inputs`, `outputs` and `decisions` each non-empty.
@@ -168,9 +165,9 @@ That is intended: scores are comparable *within* a prompt, never across prompts.
 ## the two output files, and why there are two
 
 Harbor 0.22.0 parses `/logs/verifier/reward.json` as a flat map of name → number (`VerifierResult.rewards: dict[str, float | int]`) and raises a pydantic `ValidationError` on any string or null value.
-v2 wrote `"prompt_variant": "astra"` into that file, and the resulting trial recorded a perfectly good reward of 1.00 in `reward.json` alongside an `exception_info` in `result.json` saying `unable to parse string as an integer, input_value='astra'`.
+A single string in that map is enough to sink a trial: one written with `"prompt_variant": "astra"` recorded a perfectly good reward of 1.00 in `reward.json` alongside an `exception_info` in `result.json` saying `unable to parse string as an integer, input_value='astra'`.
 
-So v3 writes two files.
+So the verifier writes two files.
 
 `/logs/verifier/reward.json` — numbers only, exactly these six keys:
 
@@ -198,10 +195,10 @@ An unrecognised value is a hard error rather than a silently-chosen formula, and
 The verifier never infers the tier from the agent's artifacts.
 "Does an `astra.yaml` exist" would score the agent's behaviour in order to decide how to score the agent's behaviour: tier A's rubric would flip the moment an unprompted agent reached for ASTRA, which is precisely the signal the ablation exists to measure.
 
-## why the continuous scores are not pytest tests
+## the continuous scores are not pytest tests
 
 A pytest run is pass or fail — 0 or 1.
-A continuous score cannot be a pytest verdict without quantising it back into the windows v3 exists to remove.
+A continuous score cannot be a pytest verdict without quantising it back into a window.
 So `tests/score.py` is a plain module that reads the named `best_fit.json` through `_util` and prints its two scores as JSON on stdout; `test.sh` runs it and folds the result into both output files.
 `test_science.py` keeps only `test_deliverables`, which genuinely is binary.
 
@@ -211,7 +208,7 @@ The image only pre-caches the arXiv preprint DOI.
 `10.1088/0004-637X/746/1/85` (Suzuki's own journal DOI) and both Planck DOIs seen in practice (`10.1051/0004-6361/201833910`, `10.1051/0004-6361/201321529`) are behind a publisher paywall/CAPTCHA and genuinely unfetchable via `astra paper add` — confirmed by trying them with live network access, not inferred.
 An agent that cites the canonical published DOI over the arXiv preprint we happen to pre-cache would fail to verify that citation through no fault of its own reasoning; this is scoring our cache, not the agent, which is why the journal DOI is remapped and why verification is scoped to "at least one" rather than "all".
 
-## what this verifier deliberately does not require
+## deliberate omissions
 
 The rule is that the verifier may only require what the instruction file actually asks for.
 
@@ -227,7 +224,7 @@ The rule is that the verifier may only require what the instruction file actuall
 Both instruction files tell the agent exactly where to put the answer, in wording that must match `environment/project/contract.json` — the single source of truth for the project root, the two result paths, and the two JSON key names.
 That file is baked into the image at `/root/sn-cosmology/contract.json`, so `tests/_util.py`, `solution/scripts/fit.py`, `solution/scripts/plot_hubble.py`, and `solution/solve.sh` all read it rather than restating paths or keys independently; `check_contract_drift.py` (task root, not part of `test.sh` — see its docstring for why) guards that the two instruction files still match it.
 
-`tests/reference.json` holds the other half — Ω_Λ = 0.705, σ_ref = 0.0415, and the log-width 1.4 — and is deliberately kept out of the baked project, for the same reason v2's `tolerances.json` was.
+`tests/reference.json` holds the other half — Ω_Λ = 0.705, σ_ref = 0.0415, and the log-width 1.4 — and is deliberately kept out of the baked project.
 Unlike the paths and keys, these are not disclosed in the prompt: baking the paper's answer into the agent's working directory would hand over the thing the task exists to make it derive.
 
 ASTRA spec authoring is a different matter: the agent chooses `astra.yaml`'s own paths, decision IDs and option IDs, so `spec_valid` and `evidence_verified` never require specific IDs, a particular dependency shape, or particular decisions.
