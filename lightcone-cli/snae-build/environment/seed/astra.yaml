@@ -18,23 +18,50 @@ inputs:
 outputs:
   - id: best_fit
     type: metric
+    format: json
     description: "Best-fit H0 and Omega_L from chi-squared minimization, with reduced chi-squared"
+    inputs: [union21]
+    decisions: [optimizer, error_model, redshift_cut]
     recipe:
-      command: python scripts/fit.py
+      command: >-
+        python scripts/fit.py
+        --data {inputs.union21}
+        --output {output}
+        --optimizer {decisions.optimizer}
+        --error-model {decisions.error_model}
+        --redshift-cut {decisions.redshift_cut}
 
   - id: hubble_diagram
     type: figure
+    format: png
     description: "Hubble diagram: distance modulus vs redshift with best-fit model overlay"
-    inputs: [best_fit]
+    inputs: [union21, best_fit]
     recipe:
-      command: python scripts/plot_hubble.py
+      command: >-
+        python scripts/plot_hubble.py
+        --data {inputs.union21}
+        --fit {inputs.best_fit}
+        --output {output}
 
   - id: residuals
     type: figure
+    format: png
     description: "Residuals plot: data minus best-fit model vs redshift"
-    inputs: [best_fit]
+    inputs: [union21, best_fit]
     recipe:
-      command: python scripts/plot_residuals.py
+      command: >-
+        python scripts/plot_residuals.py
+        --data {inputs.union21}
+        --fit {inputs.best_fit}
+        --output {output}
+
+  - id: catalog_summary
+    type: metric
+    format: json
+    description: "Input fingerprint, independent of the fitting decisions"
+    inputs: [union21]
+    recipe:
+      command: python scripts/catalog_summary.py --data {inputs.union21} --output {output}
 
 decisions:
   optimizer:

@@ -3,9 +3,9 @@ artifacts = []
 
 [task]
 name = "lightcone/snae-build"
-version = "0.1.0"
-description = "Build a seeded ASTRA analysis end to end with lightcone-cli: complete the deliberately incomplete spec, write the recipe scripts, declare dependencies, materialize every output through the engine, and prepare the project for publication."
-keywords = ["astronomy", "lightcone-cli", "astra", "build-from-scratch", "naive-usage", "provenance"]
+version = "0.2.0"
+description = "Operate a supplied analysis with lightcone-cli: selective execution, idempotency, decision and input invalidation, rollback and recovery, fresh-clone reproduction, and publication."
+keywords = ["astronomy", "lightcone-cli", "astra", "execution", "incremental-build", "recovery", "provenance"]
 [[task.authors]]
 name = "dkn16"
 email = "dkn16@foxmail.com"
@@ -13,10 +13,9 @@ email = "dkn16@foxmail.com"
 [metadata]
 category = "natural-science"
 difficulty = "medium"
-# Ported from lightcone-cli's own PR eval (.github/workflows/eval.yml +
-# evals/prompt.md + evals/tasks/snae at the pinned commit): same seed, same
-# prompt, same gate — now agent-agnostic, oracle-gated, and comparable
-# across the skills axis.
+# Derived from the original build eval; v0.2 adds execution lifecycle
+# checkpoints. Scores are not comparable to the v0.1 three-dimension rubric.
+# source_commit below is historical provenance, not the tested CLI version.
 source_format = "lightcone-cli-eval"
 source_commit = "78059fab1608b033370558cfef3f5d6ffad26084"
 

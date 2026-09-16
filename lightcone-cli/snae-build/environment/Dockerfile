@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 # CI's materialize.sh rewrites this line to pin the stack under test
 # (stack_ref). Keep the exact "ARG LIGHTCONE_COMMIT=" spelling.
-ARG LIGHTCONE_COMMIT=78059fab1608b033370558cfef3f5d6ffad26084
+ARG LIGHTCONE_COMMIT=main
 
 # lc scrubs ambient UV_* settings from recipe environments, except these two
 # (see lightcone/engine/project.py): a shared managed interpreter and a
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --no-cache-dir uv==0.12.13 \
+RUN python -m pip install --no-cache-dir uv==0.12.13 pytest==8.4.1 pyyaml==6.0.2 \
     && uv python install 3.12
 
 # lc (whose entry points mirror the git-annex executables, so `git add` of
@@ -46,16 +46,19 @@ RUN git config --system user.name "Lightcone Eval" \
 # Scaffold the project exactly as lightcone-cli's own eval does: `lc init`,
 # the task seed overlaid, the universe regenerated from the seed spec's
 # defaults, then a clean seed commit (lc materialize refuses a dirty tree).
-# No scientific dependencies are pre-seeded — declaring them (`uv add`) is
-# part of what the task measures.
+# Scientific scripts and a complete spec are supplied; declaring their
+# dependencies and driving the execution lifecycle are the task.
 RUN lc init /root/snae-build
 COPY seed/ /root/snae-build/
+COPY seed/ /opt/snae-reference/
+RUN chmod -R go-rwx /opt/snae-reference
 RUN cd /root/snae-build \
     && rm -f universes/baseline.yaml \
     && astra universe generate -n baseline \
         -d 'Default configuration using standard practices' \
     && git add -A \
-    && git commit -q -m 'Seed the eval task'
+    && git commit -q -m 'Seed the eval task' \
+    && git tag eval/seed
 
 # Warm the shared cache with the packages the recipes will plausibly need so
 # a trial does not hinge on PyPI; the project itself stays dependency-free.
@@ -66,7 +69,9 @@ RUN uv init /tmp/warm \
 # The harness runs the agent as an unprivileged user with HOME=/home/<user>
 # and the verifier as root: tools and interpreter readable by all, cache and
 # project writable, and /root traversable (it is 0700 on this base image).
-RUN chmod -R a+rX /opt/uv-tools /opt/uv-python \
+RUN mkdir -p /root/snae-build-reports /root/snae-reproduced \
+    && chmod a+rwx /root/snae-build-reports /root/snae-reproduced \
+    && chmod -R a+rX /opt/uv-tools /opt/uv-python \
     && chmod -R a+rwX /opt/uv-cache /root/snae-build \
     && chmod 711 /root
 
