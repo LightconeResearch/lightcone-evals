@@ -11,7 +11,8 @@ oracle gate, agent matrix, reporting, baselines) lives in `lightcone-bench`.
 template/        # copyable Harbor 1.4 task template (see template/README.md)
 lightcone-cli/   # tasks targeting the lightcone-cli stack
   snae-end-to-end-local/   # exam-like: estimate, run one boundary, classify (older lc pin)
-  snae-build/              # execution lifecycle: selective builds, invalidation, recovery, clone reproduction
+  snae-build/              # guided execution lifecycle
+  snae-run-natural/        # natural-language execution request, no command guidance
 ```
 
 Tasks are grouped by the stack under test; one folder per task, in Harbor 1.4
@@ -26,3 +27,8 @@ to pick up branch changes. The older end-to-end task retains its historical pin.
 
 The v0.2 execution rubric is intentionally incompatible with v0.1 scores.
 Regenerate benchmark baselines after adopting this task version.
+
+The natural-language baseline is [`snae-run-natural`](lightcone-cli/snae-run-natural/README.md).
+Select it explicitly and leave skills disabled. Its grader reads actual project
+state and ordinary execution history; the agent need not produce special reports
+or checkpoint tags. The existing guided task and runner default are unchanged.
