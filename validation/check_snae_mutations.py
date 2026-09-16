@@ -1,31 +1,23 @@
-"""Run inside a completed oracle container: each corrupted result must lose credit.
+"""Reject corrupted outcomes for either paired SNAE task in a completed oracle container."""
 
-Mount this directory at /validation and the task tests at /tests. No model calls.
-Every mutation is restored before moving on; fails if a verifier accepts it.
-"""
-
-import json
 import subprocess
-import sys
 from contextlib import contextmanager
 from pathlib import Path
 
-sys.path.insert(0, "/tests")
-from test_execution import load_report
-
-ROOT = Path("/root/snae-build")
-REPORTS = Path("/root/snae-build-reports")
-CLONE = Path("/root/snae-reproduced")
+ROOT = Path("/root/snae-natural")
 
 
 @contextmanager
 def changed(path, content):
-    original = path.read_bytes()
+    original = path.read_bytes() if path.exists() else None
     try:
         path.write_bytes(content)
         yield
     finally:
-        path.write_bytes(original)
+        if original is None:
+            path.unlink()
+        else:
+            path.write_bytes(original)
 
 
 def rejected(name, test):
@@ -37,11 +29,11 @@ def rejected(name, test):
             "-p",
             "no:cacheprovider",
             "-q",
-            f"/tests/test_execution.py::{test}",
+            f"/tests/test_outcomes.py::{test}",
         ],
         capture_output=True,
         text=True,
-        timeout=100,
+        timeout=90,
         check=False,
     )
     assert result.returncode == 1, (
@@ -50,71 +42,31 @@ def rejected(name, test):
     print(f"REJECTED: {name}")
 
 
-cases = [
-    (
-        "unrequested output ran",
-        "targeted",
-        {
-            "made": [
-                "baseline/best_fit",
-                "baseline/hubble_diagram",
-                "baseline/residuals",
-            ]
-        },
-        "test_targeted_execution",
-    ),
-    (
-        "no-op reran a recipe",
-        "repeat",
-        {"made": ["baseline/best_fit"]},
-        "test_idempotent_repeat",
-    ),
-    (
-        "unrelated branch rebuilt",
-        "decision",
-        {
-            "made": [
-                "baseline/best_fit",
-                "baseline/hubble_diagram",
-                "baseline/residuals",
-                "baseline/catalog_summary",
-            ]
-        },
-        "test_decision_and_input_invalidation",
-    ),
-    (
-        "false success after failure",
-        "failed",
-        {"ok": True},
-        "test_failure_rollback_and_recovery",
-    ),
-]
-for name, stage, patch, test in cases:
-    path = REPORTS / f"{stage}.json"
-    payload = load_report(path)
-    with changed(path, json.dumps({**payload, **patch}).encode()):
-        rejected(name, test)
-with changed(REPORTS / "failed.exitcode", b"0\n"):
-    rejected("missing failure exit status", "test_failure_rollback_and_recovery")
-with changed(CLONE / "results/baseline/best_fit.json", b'{"wrong": true}\n'):
-    rejected("clone output corruption", "test_fresh_clone_reproduces")
-with changed(ROOT / "ro-crate-metadata.json", b'{"@context": "x", "@graph": []}\n'):
-    rejected("empty publication metadata", "test_publication_and_final_state")
-# Refuse a forged success report even if its JSON still looks plausible.
-old = subprocess.check_output(
-    ["git", "-C", str(ROOT), "rev-parse", "eval/repeat"], text=True
-).strip()
-try:
-    subprocess.run(
-        ["git", "-C", str(ROOT), "tag", "-f", "eval/repeat", "eval/decision"],
-        check=True,
-        capture_output=True,
-    )
-    rejected("no-op checkpoint actually advanced", "test_idempotent_repeat")
-finally:
-    subprocess.run(
-        ["git", "-C", str(ROOT), "tag", "-f", "eval/repeat", old],
-        check=True,
-        capture_output=True,
-    )
-print("All 8 corrupted outcomes were rejected.")
+with changed(
+    ROOT / "new-analysis/results/baseline/residuals.png", b"unrequested product"
+):
+    rejected("unrequested output created", "test_targeted_execution")
+path = ROOT / "updated-analysis/universes/baseline.yaml"
+with changed(
+    path,
+    path.read_bytes().replace(b"error_model: stat_only", b"error_model: stat_and_sys"),
+):
+    rejected("requested uncertainty treatment undone", "test_incremental_execution")
+path = ROOT / "interrupted-analysis/data/SCPUnion2.1_mu_vs_z.txt"
+with changed(
+    path,
+    Path("/opt/snae-natural-reference/seed/data/SCPUnion2.1_mu_vs_z.txt").read_bytes(),
+):
+    rejected("corrected measurement discarded", "test_failure_recovery")
+with changed(
+    ROOT / "reproduced-analysis/results/baseline/best_fit.json", b'{"wrong": true}\n'
+):
+    rejected("reproduced bytes corrupted", "test_clone_reproduction")
+with changed(
+    ROOT / "updated-analysis/ro-crate-metadata.json",
+    b'{"@context": "x", "@graph": []}\n',
+):
+    rejected("empty publication metadata", "test_publication_provenance")
+with changed(ROOT / "new-analysis/scripts/fit.py", b'print("placeholder output")\n'):
+    rejected("scientific recipe replaced", "test_targeted_execution")
+print("All 6 corrupted paired-task outcomes were rejected.")

@@ -3,9 +3,9 @@ artifacts = []
 
 [task]
 name = "lightcone/snae-build"
-version = "0.2.0"
-description = "Operate a supplied analysis with lightcone-cli: selective execution, idempotency, decision and input invalidation, rollback and recovery, fresh-clone reproduction, and publication."
-keywords = ["astronomy", "lightcone-cli", "astra", "execution", "incremental-build", "recovery", "provenance"]
+version = "0.3.0"
+description = "Complete the same natural-language work request with lightcone-cli named: selective execution, incremental updates, failure recovery, fresh reproduction and publication. No commands, tutorials or reporting protocol are supplied in the prompt."
+keywords = ["lightcone-cli", "execution", "natural-language", "tool-discovery", "recovery", "provenance"]
 [[task.authors]]
 name = "dkn16"
 email = "dkn16@foxmail.com"
@@ -13,22 +13,17 @@ email = "dkn16@foxmail.com"
 [metadata]
 category = "natural-science"
 difficulty = "medium"
-# Derived from the original build eval; v0.2 adds execution lifecycle
-# checkpoints. Scores are not comparable to the v0.1 three-dimension rubric.
-# source_commit below is historical provenance, not the tested CLI version.
 source_format = "lightcone-cli-eval"
+# Scientific fixture origin, not the version of the CLI installed in a trial.
 source_commit = "78059fab1608b033370558cfef3f5d6ffad26084"
+prompt_style = "natural-language-tool-named"
 
 [verifier]
+user = "root"
 timeout_sec = 600.0
-collect = []
-
-[verifier.env]
 
 [agent]
-# The upstream eval gives Claude Code 15 minutes / 200 turns; other harnesses
-# are slower, and this must still fit the bench's 60-minute job with the
-# image build.
+user = "agent"
 timeout_sec = 1800.0
 
 [environment]
@@ -39,8 +34,3 @@ cpus = 2
 memory_mb = 4096
 storage_mb = 10240
 gpus = 0
-mcp_servers = []
-
-[environment.env]
-
-[solution.env]

@@ -1,7 +1,6 @@
-Please finish the supplied supernova analyses using Lightcone and leave a
-reproducible handoff. The projects are in /root/snae-natural. Their scientific
-methods and scripts are already supplied; this is execution work, not a request
-to redesign the analysis.
+Please finish the supplied supernova analyses and leave a reproducible handoff.
+The projects are in /root/snae-natural. Their scientific methods and scripts are
+already supplied; this is execution work, not a request to redesign the analysis.
 
 In new-analysis, I only need the Hubble diagram and the fit it depends on.
 Leave the other products unbuilt for now.

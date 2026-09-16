@@ -35,44 +35,21 @@ RUN UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
     uv tool install --python 3.12 \
         "astra-tools==$(/opt/uv-tools/lightcone-cli/bin/python -c 'import importlib.metadata as m; print(m.version("astra-tools"))')"
 
-# A git identity for whoever commits (the agent is told to; the engine
-# commits every output), and root reading the agent-owned repo in the
-# verifier without git's dubious-ownership refusal.
+# The image prepares realistic starting states, not an agent tutorial.
 RUN git config --system user.name "Lightcone Eval" \
     && git config --system user.email eval@lightcone \
     && git config --system init.defaultBranch main \
     && git config --system --add safe.directory '*'
 
-# Scaffold the project exactly as lightcone-cli's own eval does: `lc init`,
-# the task seed overlaid, the universe regenerated from the seed spec's
-# defaults, then a clean seed commit (lc materialize refuses a dirty tree).
-# Scientific scripts and a complete spec are supplied; declaring their
-# dependencies and driving the execution lifecycle are the task.
-RUN lc init /root/snae-build
-COPY seed/ /root/snae-build/
-COPY seed/ /opt/snae-reference/
-RUN chmod -R go-rwx /opt/snae-reference
-RUN cd /root/snae-build \
-    && rm -f universes/baseline.yaml \
-    && astra universe generate -n baseline \
-        -d 'Default configuration using standard practices' \
-    && git add -A \
-    && git commit -q -m 'Seed the eval task' \
-    && git tag eval/seed
+COPY seed/ /opt/snae-natural-reference/seed/
+COPY prepare.py /tmp/prepare-snae.py
+RUN python3 /tmp/prepare-snae.py \
+    && rm /tmp/prepare-snae.py \
+    && chmod -R go-rwx /opt/snae-natural-reference
 
-# Warm the shared cache with the packages the recipes will plausibly need so
-# a trial does not hinge on PyPI; the project itself stays dependency-free.
-RUN uv init /tmp/warm \
-    && cd /tmp/warm && uv add numpy scipy matplotlib \
-    && rm -rf /tmp/warm
-
-# The harness runs the agent as an unprivileged user with HOME=/home/<user>
-# and the verifier as root: tools and interpreter readable by all, cache and
-# project writable, and /root traversable (it is 0700 on this base image).
-RUN mkdir -p /root/snae-build-reports /root/snae-reproduced \
-    && chmod a+rwx /root/snae-build-reports /root/snae-reproduced \
+RUN useradd -m -s /bin/bash agent \
+    && chown -R agent:agent /root/snae-natural \
     && chmod -R a+rX /opt/uv-tools /opt/uv-python \
-    && chmod -R a+rwX /opt/uv-cache /root/snae-build \
+    && chmod -R a+rwX /opt/uv-cache /root/snae-natural \
     && chmod 711 /root
-
-WORKDIR /root/snae-build
+WORKDIR /root/snae-natural

@@ -1,21 +1,18 @@
-"""Seven separately scored execution dimensions, all deterministic."""
+"""Five outcome dimensions; no agent reporting protocol or manual checkpoints."""
 
 import json
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 LOGS = Path(os.environ.get("LOGS_DIR", "/logs/verifier"))
-TESTS = Path(__file__).with_name("test_execution.py")
+TESTS = Path(__file__).with_name("test_outcomes.py")
 DIMENSIONS = {
-    "targeted_execution": (15, "test_targeted_execution"),
-    "full_execution": (15, "test_full_execution_and_preserved_contract"),
-    "idempotent_repeat": (10, "test_idempotent_repeat"),
-    "selective_invalidation": (20, "test_decision_and_input_invalidation"),
-    "failure_recovery": (15, "test_failure_rollback_and_recovery"),
-    "clone_reproduction": (15, "test_fresh_clone_reproduces"),
-    "publication_provenance": (10, "test_publication_and_final_state"),
+    "targeted_execution": (20, "test_targeted_execution"),
+    "incremental_execution": (20, "test_incremental_execution"),
+    "failure_recovery": (20, "test_failure_recovery"),
+    "clone_reproduction": (20, "test_clone_reproduction"),
+    "publication_provenance": (20, "test_publication_provenance"),
 }
 LOGS.mkdir(parents=True, exist_ok=True)
 subprocess.run(
@@ -51,15 +48,18 @@ for name, (weight, test) in DIMENSIONS.items():
 reward["reward"] = points / 100
 (LOGS / "reward.txt").write_text(f"{points / 100:.2f}\n")
 (LOGS / "reward.json").write_text(json.dumps(reward, indent=2) + "\n")
-reports = Path(os.environ.get("REPORTS", "/root/snae-build-reports"))
-if reports.is_dir():
-    shutil.copytree(reports, LOGS / "execution-reports", dirs_exist_ok=True)
-root = Path(os.environ.get("PROJECT", "/root/snae-build"))
-with (LOGS / "git-history.txt").open("w") as log:
-    subprocess.run(
-        ["git", "-C", str(root), "log", "--all", "--decorate", "--oneline"],
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+for name in (
+    "new-analysis",
+    "updated-analysis",
+    "interrupted-analysis",
+    "reproduced-analysis",
+):
+    root = Path("/root/snae-natural") / name
+    with (LOGS / f"{name}-history.txt").open("w") as log:
+        subprocess.run(
+            ["git", "-C", str(root), "log", "--all", "--decorate", "--oneline"],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
 print(json.dumps(reward))

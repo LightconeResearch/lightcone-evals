@@ -3,8 +3,8 @@ artifacts = []
 
 [task]
 name = "lightcone/snae-run-natural"
-version = "0.1.0"
-description = "Discover and operate Lightcone from a natural-language work request: selective execution, incremental updates, failure recovery, fresh reproduction and publication. No commands, tutorials or reporting protocol are supplied in the prompt."
+version = "0.2.0"
+description = "Complete a natural-language work request without naming the tool: selective execution, incremental updates, failure recovery, fresh reproduction and publication. No commands, tutorials or reporting protocol are supplied in the prompt."
 keywords = ["lightcone-cli", "execution", "natural-language", "tool-discovery", "recovery", "provenance"]
 [[task.authors]]
 name = "dkn16"
@@ -16,7 +16,7 @@ difficulty = "medium"
 source_format = "lightcone-cli-eval"
 # Scientific fixture origin, not the version of the CLI installed in a trial.
 source_commit = "78059fab1608b033370558cfef3f5d6ffad26084"
-prompt_style = "natural-language-outcomes-only"
+prompt_style = "natural-language-unhinted"
 
 [verifier]
 user = "root"

@@ -1,7 +1,7 @@
 ---
 document_version: '0.1'
 verifier:
-  name: snae-natural-outcome-verifier
+  name: snae-outcome-verifier
   default_strategy: script
   strategies:
     script: {type: script, command: ./test.sh}
@@ -18,7 +18,8 @@ verifier:
     reward_json: /logs/verifier/reward.json
 ---
 
-The agent receives only the natural-language work request. It is not asked
+Both tasks use this same verifier. The agent receives the natural-language work
+request; snae-build adds only a sentence naming lightcone-cli. It is not asked
 for command transcripts, JSON reports, special tags, or grader checkpoints.
 The verifier never runs recipes or completes work on the agent's behalf.
 
@@ -39,6 +40,9 @@ normal CLI status, output bytes, manifests and execution commits.
   tracked publication metadata covering all four actual products, without
   unnecessary recipe reruns.
 
-All five dimensions are deterministic and equally weighted. This separate task
-has different starting states and a different rubric from snae-build; compare
-configurations within this task, not its raw score against snae-build's score.
+All five dimensions are deterministic and equally weighted. snae-build and
+snae-run-natural have identical environment files, reference solutions and
+verifiers. Their task prompts differ only by the tool-naming sentence. Compare
+repeated runs with the same CLI commit, model, agent settings and skills setting.
+The old snae-build v0.2 lifecycle scores use a different rubric and are not
+comparable with this pair.
