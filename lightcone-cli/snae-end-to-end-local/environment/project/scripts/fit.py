@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
-from pathlib import Path
 
 import numpy as np
+from artifacts import write_archive
 from cosmology import (
     SYSTEMATIC_FLOOR_MAG,
     distance_modulus,
@@ -22,8 +23,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--optimizer", choices=("nelder_mead", "l_bfgs_b"), required=True)
-    parser.add_argument("--error-model", choices=("stat_only", "stat_and_sys"), required=True)
+    parser.add_argument(
+        "--optimizer", choices=("nelder_mead", "l_bfgs_b"), required=True
+    )
+    parser.add_argument(
+        "--error-model", choices=("stat_only", "stat_and_sys"), required=True
+    )
     parser.add_argument("--redshift-cut", choices=("none", "z_min_001"), required=True)
     return parser.parse_args()
 
@@ -65,8 +70,6 @@ def main() -> None:
     degrees_of_freedom = int(redshift.size - 2)
     model_mu = distance_modulus(redshift, h0, omega_l)
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
     summary = {
         "H0_km_s_Mpc": h0,
         "Omega_L": omega_l,
@@ -78,20 +81,28 @@ def main() -> None:
         "optimizer": args.optimizer,
         "error_model": args.error_model,
         "redshift_cut": args.redshift_cut,
-        "systematic_floor_mag": SYSTEMATIC_FLOOR_MAG if args.error_model == "stat_and_sys" else 0.0,
+        "systematic_floor_mag": SYSTEMATIC_FLOOR_MAG
+        if args.error_model == "stat_and_sys"
+        else 0.0,
         "optimization_evaluations": int(result.nfev),
         "optimization_message": str(result.message),
     }
-    with (output_dir / "best_fit.json").open("w", encoding="utf-8") as stream:
-        json.dump(summary, stream, indent=2, sort_keys=True)
-        stream.write("\n")
-
+    model_csv = io.StringIO()
     np.savetxt(
-        output_dir / "fitted_model.csv",
-        np.column_stack((redshift, observed_mu, model_mu, observed_mu - model_mu, sigma_mu)),
+        model_csv,
+        np.column_stack(
+            (redshift, observed_mu, model_mu, observed_mu - model_mu, sigma_mu)
+        ),
         delimiter=",",
         header="redshift,observed_mu,model_mu,residual_mu,sigma_mu",
         comments="",
+    )
+    write_archive(
+        args.output,
+        {
+            "best_fit.json": json.dumps(summary, indent=2, sort_keys=True) + "\n",
+            "fitted_model.csv": model_csv.getvalue(),
+        },
     )
     print(json.dumps(summary, sort_keys=True))
 

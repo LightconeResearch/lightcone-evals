@@ -44,7 +44,7 @@ def available_memory_mb() -> float:
 def measure(command: list[str]) -> dict[str, object]:
     started = time.perf_counter()
     result = subprocess.run(
-        ["/usr/bin/time", "-v", *command],
+        ["/usr/bin/time", "-v", "lc", "run", *command],
         cwd=PROJECT,
         text=True,
         capture_output=True,
@@ -61,7 +61,7 @@ def measure(command: list[str]) -> dict[str, object]:
     if peak_rss_kb is None:
         raise RuntimeError("/usr/bin/time did not report peak RSS")
     return {
-        "command": command,
+        "command": ["lc", "run", *command],
         "elapsed_seconds": elapsed,
         "peak_rss_mb": peak_rss_kb / 1000,
         "exit_status": result.returncode,
@@ -83,7 +83,7 @@ def request_for(sample: dict[str, object]) -> dict[str, object]:
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="snae-estimate-") as raw_tmp:
         tmp = Path(raw_tmp)
-        fit_dir = tmp / "best_fit"
+        fit_dir = tmp / "best_fit.zip"
         commands = {
             "best_fit": [
                 "python",
@@ -107,7 +107,7 @@ def main() -> None:
                 "--fit",
                 str(fit_dir),
                 "--output",
-                str(tmp / "hubble_diagram"),
+                str(tmp / "hubble_diagram.png"),
             ],
             "residuals": [
                 "python",
@@ -117,7 +117,7 @@ def main() -> None:
                 "--fit",
                 str(fit_dir),
                 "--output",
-                str(tmp / "residuals"),
+                str(tmp / "residuals.png"),
             ],
         }
         samples = {name: measure(command) for name, command in commands.items()}

@@ -10,7 +10,7 @@ oracle gate, agent matrix, reporting, baselines) lives in `lightcone-bench`.
 ```
 template/        # copyable Harbor 1.4 task template (see template/README.md)
 lightcone-cli/   # tasks targeting the lightcone-cli stack
-  snae-end-to-end-local/   # exam-like: estimate, run one boundary, classify (older lc pin)
+  snae-end-to-end-local/   # estimate, materialize one boundary, plan oversized work
   snae-build/              # natural-language request + "Use lightcone-cli"
   snae-run-natural/        # same request without naming the tool
 ```
@@ -19,11 +19,17 @@ Tasks are grouped by the stack under test; one folder per task, in Harbor 1.4
 split layout (`task.toml`, `instruction.md`, `environment/`, `solution/`,
 `tests/`). Start a new task by copying `template/`.
 
-Both SNAE execution tasks default to CLI `main`. The benchmark runner resolves that branch
+All three SNAE tasks default to CLI `main`. The benchmark runner resolves that branch
 once to a commit before image construction; pass `STACK_REF` (runner) or
 `--build-arg LIGHTCONE_COMMIT=<sha>` (direct Docker build) to override. Direct
 Docker builds with a mutable branch argument require a fresh build/cache refresh
-to pick up branch changes. The older end-to-end task retains its historical pin.
+to pick up branch changes.
+
+[`snae-end-to-end-local` v2.0](lightcone-cli/snae-end-to-end-local/README.md)
+uses the current `lc init` / `lc materialize` engine and the CLI's matching ASTRA
+dependency. It retains the resource estimation, local execution and oversized
+work classification scenario. Select `task=lightcone-cli/` to run all three
+tasks, or select it alone. Regenerate its baseline after upgrading from v1.
 
 The current pair is [`snae-run-natural` v0.2](lightcone-cli/snae-run-natural/README.md)
 and [`snae-build` v0.3](lightcone-cli/snae-build/README.md). They have identical

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from zipfile import ZipFile, is_zipfile
 
 import numpy as np
 from scipy.integrate import quad
@@ -51,7 +52,10 @@ def distance_modulus(redshift: np.ndarray, h0: float, omega_l: float) -> np.ndar
         return 1.0 / np.sqrt(omega_m * (1.0 + z_value) ** 3 + omega_l)
 
     comoving_integral = np.fromiter(
-        (quad(inv_expansion_rate, 0.0, value, epsabs=1e-10, epsrel=1e-10)[0] for value in z),
+        (
+            quad(inv_expansion_rate, 0.0, value, epsabs=1e-10, epsrel=1e-10)[0]
+            for value in z
+        ),
         dtype=float,
         count=z.size,
     )
@@ -61,6 +65,9 @@ def distance_modulus(redshift: np.ndarray, h0: float, omega_l: float) -> np.ndar
 
 def load_fit(path: str | Path) -> dict[str, object]:
     fit_path = Path(path)
+    if is_zipfile(fit_path):
+        with ZipFile(fit_path) as archive:
+            return json.loads(archive.read("best_fit.json"))
     if fit_path.is_dir():
         fit_path = fit_path / "best_fit.json"
     with fit_path.open(encoding="utf-8") as stream:

@@ -2,7 +2,7 @@ schema_version = "1.4"
 
 [task]
 name = "lightcone/snae-end-to-end-local"
-version = "1.0.0"
+version = "2.0.0"
 description = "The agent must estimate unresolved recipes, classify and run one fitting boundary locally, then independently classify an oversized production boundary without assuming unavailable scheduler support."
 keywords = ["astronomy", "reproducibility", "resource-estimation", "execution-planning", "local-compute", "astra"]
 [[task.authors]]
@@ -18,9 +18,11 @@ source_commit = "7098bc49ebcb4753fe36b0433ffe2fa3f8ba57b4"
 source_network_mode = "no-network"
 
 [verifier]
+user = "root"
 timeout_sec = 420.0
 
 [agent]
+user = "agent"
 timeout_sec = 1200.0
 
 [environment]

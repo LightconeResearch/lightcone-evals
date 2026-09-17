@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import numpy as np
+from artifacts import write_archive
 from cosmology import distance_modulus, effective_error, load_union21, selection_mask
 from scipy.optimize import minimize
 
@@ -20,8 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--optimizer", choices=("nelder_mead", "l_bfgs_b"), required=True)
-    parser.add_argument("--error-model", choices=("stat_only", "stat_and_sys"), required=True)
+    parser.add_argument(
+        "--optimizer", choices=("nelder_mead", "l_bfgs_b"), required=True
+    )
+    parser.add_argument(
+        "--error-model", choices=("stat_only", "stat_and_sys"), required=True
+    )
     parser.add_argument("--redshift-cut", choices=("none", "z_min_001"), required=True)
     parser.add_argument("--scale", choices=tuple(SCALE_SAMPLES), required=True)
     parser.add_argument("--workers", type=int, required=True)
@@ -102,18 +107,22 @@ def main() -> None:
         "Omega_L": omega_l_percentiles.tolist(),
     }
 
-    output = Path(args.output)
-    output.mkdir(parents=True, exist_ok=True)
-    (output / "bootstrap_intervals.json").write_text(
-        json.dumps(summary, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    samples_csv = io.StringIO()
     np.savetxt(
-        output / "bootstrap_samples.csv",
+        samples_csv,
         fits,
         delimiter=",",
         header="H0_km_s_Mpc,Omega_L",
         comments="",
+    )
+
+    write_archive(
+        args.output,
+        {
+            "bootstrap_intervals.json": json.dumps(summary, indent=2, sort_keys=True)
+            + "\n",
+            "bootstrap_samples.csv": samples_csv.getvalue(),
+        },
     )
 
 

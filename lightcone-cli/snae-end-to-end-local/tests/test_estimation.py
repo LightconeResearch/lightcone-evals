@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REFERENCE, assert_unrequested_outputs_absent, validate_astra
 from jsonschema import Draft202012Validator
 
 PROJECT = Path(os.environ.get("TASK_PROJECT_ROOT", "/root/snae"))
@@ -20,16 +21,31 @@ RESOURCE_KEYS = {"cpus", "memory", "time_limit"}
 # ASTRA documents memory as a string with units ("8GB", "512Mi", "16Gi") and
 # time_limit as a duration string ("2h", "30m", "1h30m"); accept those forms.
 _MEMORY_MB = {
-    "B": 1e-6, "KB": 1e-3, "MB": 1.0, "GB": 1e3, "TB": 1e6,
-    "K": 1e-3, "M": 1.0, "G": 1e3, "T": 1e6,
-    "KI": 1.024e-3, "MI": 1.048576, "GI": 1073.741824, "TI": 1099511.627776,
-    "KIB": 1.024e-3, "MIB": 1.048576, "GIB": 1073.741824, "TIB": 1099511.627776,
+    "B": 1e-6,
+    "KB": 1e-3,
+    "MB": 1.0,
+    "GB": 1e3,
+    "TB": 1e6,
+    "K": 1e-3,
+    "M": 1.0,
+    "G": 1e3,
+    "T": 1e6,
+    "KI": 1.024e-3,
+    "MI": 1.048576,
+    "GI": 1073.741824,
+    "TI": 1099511.627776,
+    "KIB": 1.024e-3,
+    "MIB": 1.048576,
+    "GIB": 1073.741824,
+    "TIB": 1099511.627776,
 }
 
 
 def memory_mb(value: str) -> float:
     match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([A-Za-z]+)\s*", str(value))
-    assert match and match.group(2).upper() in _MEMORY_MB, f"Unsupported memory value: {value!r}"
+    assert match and match.group(2).upper() in _MEMORY_MB, (
+        f"Unsupported memory value: {value!r}"
+    )
     return float(match.group(1)) * _MEMORY_MB[match.group(2).upper()]
 
 
@@ -39,10 +55,10 @@ def time_seconds(value: str) -> float:
     if clock:
         days, hours, minutes, seconds = (int(part or 0) for part in clock.groups())
         return days * 86400 + hours * 3600 + minutes * 60 + seconds
-    parts = re.findall(r"(\d+(?:\.\d+)?)\s*([dhms])", text, re.I)
-    assert parts and re.fullmatch(r"(?:\s*\d+(?:\.\d+)?\s*[dhms])+\s*", text, re.I), (
-        f"Unsupported time_limit value: {value!r}"
-    )
+    parts = re.findall(r"(\d+(?:\.\d+)?)\s*([dhms])", text, re.IGNORECASE)
+    assert parts and re.fullmatch(
+        r"(?:\s*\d+(?:\.\d+)?\s*[dhms])+\s*", text, re.IGNORECASE
+    ), f"Unsupported time_limit value: {value!r}"
     factor = {"d": 86400, "h": 3600, "m": 60, "s": 1}
     return sum(float(number) * factor[unit.lower()] for number, unit in parts)
 
@@ -67,21 +83,12 @@ def record() -> dict:
 
 
 def test_estimate_record_matches_supplied_schema(record: dict) -> None:
-    schema = json.loads((PROJECT / "estimate-record.schema.json").read_text())
+    schema = json.loads((REFERENCE / "project/estimate-record.schema.json").read_text())
     Draft202012Validator(schema).validate(record)
 
 
 def test_astra_validates() -> None:
-    result = subprocess.run(
-        # The pip-installed astra-tools==0.2.13 entry point is root-owned; the
-        # uvx cache the agent uses is writable by the agent and must not grade.
-        ["astra", "validate", str(PROJECT / "astra.yaml")],
-        cwd=PROJECT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr or result.stdout
+    validate_astra()
 
 
 def test_every_recipe_has_only_supported_resources(resources: dict[str, dict]) -> None:
@@ -109,7 +116,9 @@ def test_estimate_record_covers_target_and_local_capacity(record: dict) -> None:
     assert record["environment"]["gpus_available"] == 0
 
 
-def test_evidence_is_auditable_and_matches_astra(record: dict, resources: dict[str, dict]) -> None:
+def test_evidence_is_auditable_and_matches_astra(
+    record: dict, resources: dict[str, dict]
+) -> None:
     estimates = {estimate["output"]: estimate for estimate in record["estimates"]}
     assert set(estimates) == set(OUTPUTS)
     for output_name, estimate in estimates.items():
@@ -124,7 +133,7 @@ def test_evidence_is_auditable_and_matches_astra(record: dict, resources: dict[s
 def test_declared_envelopes_cover_independent_runs(resources: dict[str, dict]) -> None:
     with tempfile.TemporaryDirectory(prefix="snae-verifier-") as raw_tmp:
         tmp = Path(raw_tmp)
-        fit = tmp / "best_fit"
+        fit = tmp / "best_fit.zip"
         commands = {
             "best_fit": [
                 "python",
@@ -148,7 +157,7 @@ def test_declared_envelopes_cover_independent_runs(resources: dict[str, dict]) -
                 "--fit",
                 str(fit),
                 "--output",
-                str(tmp / "hubble"),
+                str(tmp / "hubble.png"),
             ],
             "residuals": [
                 "python",
@@ -158,7 +167,7 @@ def test_declared_envelopes_cover_independent_runs(resources: dict[str, dict]) -
                 "--fit",
                 str(fit),
                 "--output",
-                str(tmp / "residuals"),
+                str(tmp / "residuals.png"),
             ],
         }
         for output_name, command in commands.items():
@@ -172,7 +181,9 @@ def test_declared_envelopes_cover_independent_runs(resources: dict[str, dict]) -
             )
             elapsed = time.perf_counter() - started
             assert result.returncode == 0, result.stderr or result.stdout
-            match = re.search(r"Maximum resident set size \(kbytes\):\s*(\d+)", result.stderr)
+            match = re.search(
+                r"Maximum resident set size \(kbytes\):\s*(\d+)", result.stderr
+            )
             assert match, "peak RSS was not reported"
             measured_memory_mb = int(match.group(1)) / 1000
             declared = resources[output_name]
@@ -184,7 +195,4 @@ def test_declared_envelopes_cover_independent_runs(resources: dict[str, dict]) -
 
 
 def test_estimation_did_not_materialize_unrequested_outputs() -> None:
-    baseline = PROJECT / "results" / "baseline"
-    assert not (baseline / "hubble_diagram").exists()
-    assert not (baseline / "residuals").exists()
-    assert not (baseline / "bootstrap_intervals").exists()
+    assert_unrequested_outputs_absent()

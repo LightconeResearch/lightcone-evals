@@ -10,7 +10,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from cosmology import distance_modulus, effective_error, load_fit, load_union21, selection_mask
+from cosmology import (
+    distance_modulus,
+    effective_error,
+    load_fit,
+    load_union21,
+    selection_mask,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,9 +57,9 @@ def main() -> None:
     axis.set_title("Union2.1 flat-ΛCDM residuals")
     axis.grid(alpha=0.2)
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output_dir / "residuals.png", dpi=180)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=180)
     plt.close(figure)
 
 

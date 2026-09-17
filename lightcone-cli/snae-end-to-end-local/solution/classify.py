@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import math
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -53,6 +55,13 @@ def main() -> None:
     resources = output["recipe"]["resources"]
     cpus = available_cpus()
     memory = available_memory_mb()
+    assert not os.environ.get("SLURM_JOB_ID")
+    assert shutil.which("sbatch") is None
+    status = json.loads(
+        subprocess.check_output(["lc", "status", "--json"], cwd=PROJECT, text=True)
+    )
+    remaining = [o["output"] for o in status["outputs"] if o["status"] != "current"]
+    assert "baseline/bootstrap_intervals" in remaining
     limiting = ["lifetime"]
     if resources["cpus"] > cpus:
         limiting.append("cpus")
@@ -67,13 +76,21 @@ def main() -> None:
         "limiting_resources": limiting,
         "next_environment": "supported-configured-slurm-site",
         "next_command": None,
+        "remaining_outputs": remaining,
+        "requested_resources": resources,
+        "available_resources": {"cpus": cpus, "memory_mb": memory, "gpus": 0},
         "reason": (
-            "The production boundary must survive this session and cannot use detached "
-            "Lightcone execution on an unconfigured local host. Move the project to a "
-            "supported configured Slurm site, refresh status, and classify again there."
+            "This host has no Slurm submission tools, insufficient CPU/memory, and no "
+            "session-independent allocation. Move the project to a supported Slurm "
+            "site, request at least 8 CPUs, 8GB and 6h in a batch allocation, then "
+            "materialize baseline/bootstrap_intervals inside that allocation. "
+            "The site account and queue must be confirmed before a submission command "
+            "can be given. Recipe resource annotations do not create an allocation."
         ),
     }
-    (PROJECT / "execution-plan.json").write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+    (PROJECT / "execution-plan.json").write_text(
+        json.dumps(plan, indent=2, sort_keys=True) + "\n"
+    )
 
 
 if __name__ == "__main__":

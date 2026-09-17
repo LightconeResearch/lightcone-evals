@@ -11,7 +11,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from cosmology import distance_modulus, effective_error, load_fit, load_union21, selection_mask
+from cosmology import (
+    distance_modulus,
+    effective_error,
+    load_fit,
+    load_union21,
+    selection_mask,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,7 +35,9 @@ def main() -> None:
     keep = selection_mask(redshift, str(fit["redshift_cut"]))
     sigma_mu = effective_error(statistical_error, str(fit["error_model"]))
 
-    model_redshift = np.linspace(float(redshift[keep].min()), float(redshift[keep].max()), 800)
+    model_redshift = np.linspace(
+        float(redshift[keep].min()), float(redshift[keep].max()), 800
+    )
     model_mu = distance_modulus(
         model_redshift,
         float(fit["H0_km_s_Mpc"]),
@@ -65,9 +73,9 @@ def main() -> None:
     axis.grid(alpha=0.2)
     axis.legend(frameon=False)
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output_dir / "hubble_diagram.png", dpi=180)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=180)
     plt.close(figure)
 
 
