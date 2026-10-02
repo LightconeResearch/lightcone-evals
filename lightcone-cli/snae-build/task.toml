@@ -18,7 +18,7 @@ difficulty = "medium"
 # prompt, same gate — now agent-agnostic, oracle-gated, and comparable
 # across the skills axis.
 source_format = "lightcone-cli-eval"
-source_commit = "78059fab1608b033370558cfef3f5d6ffad26084"
+source_commit = "cd7c5399c43d591998f4cee774865d4e93099899"
 
 [verifier]
 timeout_sec = 600.0

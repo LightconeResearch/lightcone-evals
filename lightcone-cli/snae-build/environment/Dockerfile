@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 # CI's materialize.sh rewrites this line to pin the stack under test
 # (stack_ref). Keep the exact "ARG LIGHTCONE_COMMIT=" spelling.
-ARG LIGHTCONE_COMMIT=78059fab1608b033370558cfef3f5d6ffad26084
+ARG LIGHTCONE_COMMIT=cd7c5399c43d591998f4cee774865d4e93099899
 
 # lc scrubs ambient UV_* settings from recipe environments, except these two
 # (see lightcone/engine/project.py): a shared managed interpreter and a
