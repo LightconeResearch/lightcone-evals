@@ -1,0 +1,48 @@
+schema_version = "1.4"
+artifacts = [
+  { source = "/root/line-fit/astra.yaml", destination = "astra.yaml" },
+  { source = "/root/line-fit/universes", destination = "universes" },
+]
+
+[task]
+name = "lightcone/smoke-astra-add-decision"
+version = "0.1.0"
+description = "Record the fit model as an ASTRA decision (linear default, quadratic alternative), keep existing universes valid, and add a universe selecting quadratic."
+keywords = ["astra", "smoke", "decisions", "universes"]
+[[task.authors]]
+name = "cailmdaley"
+email = "cailmdaley@gmail.com"
+
+[metadata]
+category = "natural-science"
+difficulty = "easy"
+# A cheap smoke test that the agent plugins still let an agent do one basic
+# thing: `had_to` is that thing, `proves` what a 1.0 shows. Ported from
+# agent-skills evals/smoke at the commit below.
+had_to = "add a decision and a universe"
+proves = "a new decision and universe validate, and the universe reaches the recipe"
+source_format = "agent-skills-smoke"
+source_commit = "3630293"
+
+[verifier]
+timeout_sec = 180.0
+collect = []
+
+[verifier.env]
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 1800.0
+os = "linux"
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]
