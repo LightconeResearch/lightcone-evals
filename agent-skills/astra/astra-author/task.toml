@@ -1,0 +1,47 @@
+schema_version = "1.4"
+artifacts = [
+  { source = "/root/line-fit/astra.yaml", destination = "astra.yaml" },
+]
+
+[task]
+name = "lightcone/smoke-astra-author"
+version = "0.1.0"
+description = "Write a valid astra.yaml declaring the raw input and the two outputs of an existing clean -> fit pipeline."
+keywords = ["astra", "smoke", "spec-authoring"]
+[[task.authors]]
+name = "cailmdaley"
+email = "cailmdaley@gmail.com"
+
+[metadata]
+category = "natural-science"
+difficulty = "easy"
+# A cheap smoke test that the agent plugins still let an agent do one basic
+# thing: `had_to` is that thing, `proves` what a 1.0 shows. Ported from
+# agent-skills evals/smoke at the commit below.
+had_to = "write a spec for a two-step pipeline"
+proves = "a hand-written spec for a two-step pipeline validates and resolves"
+source_format = "agent-skills-smoke"
+source_commit = "3630293"
+
+[verifier]
+timeout_sec = 180.0
+collect = []
+
+[verifier.env]
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 1800.0
+os = "linux"
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]
