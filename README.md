@@ -16,4 +16,6 @@ lightcone-cli/   # tasks targeting the lightcone-cli stack
 
 Tasks are grouped by the stack under test; one folder per task, in Harbor 1.4
 split layout (`task.toml`, `instruction.md`, `environment/`, `solution/`,
-`tests/`). Start a new task by copying `template/`.
+`tests/`). Start a new task by copying `template/`. A task may also carry a
+`rubric.toml` beside `task.toml`: the criteria `harbor analyze` judges its
+trials by.
