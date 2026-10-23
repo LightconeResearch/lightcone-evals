@@ -3,7 +3,7 @@ artifacts = []
 
 [task]
 name = "lightcone/snae-build"
-version = "0.2.0"
+version = "0.2.1"
 description = "Build a seeded ASTRA analysis end to end with lightcone-cli: complete the deliberately incomplete spec, write the recipe scripts, declare dependencies, materialize every output through the engine, and prepare the project for publication."
 keywords = ["astronomy", "lightcone-cli", "astra", "build-from-scratch", "naive-usage", "provenance"]
 [[task.authors]]
@@ -19,6 +19,9 @@ difficulty = "medium"
 # (a ~160-line CLI manual): it is what a user would type, so how to drive lc
 # and astra must come from the skills or the CLIs' own help — which is what
 # makes the skills-on vs skills-off comparison mean something.
+# One line beyond it says the run is unattended: an agent that stops to ask
+# a question ends the trial, and that is a fact about the harness, not a
+# hint about lc.
 source_format = "lightcone-cli-eval"
 source_commit = "cd7c5399c43d591998f4cee774865d4e93099899"
 
