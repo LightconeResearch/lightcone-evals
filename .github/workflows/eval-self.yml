@@ -1,0 +1,25 @@
+name: Eval self-test
+
+# A change to a task or to the eval workflow runs the eval on its own PR,
+# against lightcone-cli main and agent-skills main.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths: [".github/workflows/eval*.yml", "lightcone-cli/snae-build/**"]
+  push:
+    branches: [main]
+    paths: [".github/workflows/eval*.yml", "lightcone-cli/snae-build/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  eval:
+    uses: ./.github/workflows/eval.yml
+    secrets: inherit
+    with:
+      tasks_ref: ${{ github.event.pull_request.head.sha || github.sha }}
