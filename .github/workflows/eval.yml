@@ -104,6 +104,24 @@ jobs:
             --arg tasks "$(git -C evals rev-parse HEAD)" \
             '{leg: $leg, stack: $stack, tasks: $tasks}' > "jobs/${{ matrix.name }}/leg.json"
 
+      # Harbor resolves a --skill ref with git ls-remote, which knows ref
+      # names only, so a source at a commit is fetched here and handed over
+      # as a local path; the commit goes in leg.json for the report
+      - name: Fetch skills pinned to a commit
+        env:
+          SKILLS: ${{ inputs.skills }}
+        run: |
+          re='^https://github\.com/([^/]+/[^/]+)/tree/([0-9a-f]{40})/(.+)$'
+          [[ $SKILLS =~ $re ]] || { echo "SKILLS=$SKILLS" >> "$GITHUB_ENV"; exit 0; }
+          repo=${BASH_REMATCH[1]} sha=${BASH_REMATCH[2]} sub=${BASH_REMATCH[3]}
+          git init -q skills-src
+          git -C skills-src sparse-checkout set --cone "$sub"
+          git -C skills-src fetch -q --depth=1 "https://github.com/$repo" "$sha"
+          git -C skills-src checkout -q FETCH_HEAD
+          echo "SKILLS=$PWD/skills-src/$sub" >> "$GITHUB_ENV"
+          jq --arg s "$sha" '.skills = $s' "jobs/${{ matrix.name }}/leg.json" > leg.json
+          mv leg.json "jobs/${{ matrix.name }}/leg.json"
+
       # Free of any model, so it runs whatever secrets the caller has: a red
       # oracle means the task or the stack broke, not the agent
       - name: Run the reference solution
@@ -118,7 +136,6 @@ jobs:
         env:
           KEY: ${{ secrets[matrix.secret] }}
           LEG_ENV: ${{ toJSON(matrix.env) }}
-          SKILLS: ${{ inputs.skills }}
           CLAUDE_CODE_MAX_TURNS: "200"
         run: |
           [ -n "$KEY" ] || {
@@ -188,7 +205,8 @@ jobs:
           fi
 
           # One row per leg: the oracle's verdict, what the task's verifier
-          # recorded, and the skills Harbor injected (name@commit, from its lock)
+          # recorded, and the skills Harbor injected (name@commit, from its lock or
+          # the pinned fetch)
           for d in collected/eval-leg-*/; do
             [ -f "$d/leg.json" ] || continue
             leg=$(jq -r .leg "$d/leg.json")
@@ -204,7 +222,7 @@ jobs:
               $l[0] + {oracle: $oracle, trial: (if $r == [] then null else $trial end),
                 reward: $w[0].reward, steps: $w[0].agent_steps,
                 skills_loaded: (if $w[0].skills_loaded == null then null else $w[0].skills_loaded == 1 end),
-                skills: [$k[0].trials[0].skills[]? | "\(.name)@\(.git_commit_id // "local" | .[:7])"] | unique,
+                skills: [$k[0].trials[0].skills[]? | "\(.name)@\(.git_commit_id // $l[0].skills // "local" | .[:7])"] | unique,
                 exception: ($r[0].exception_info
                   | if . then "\(.exception_type): \(.exception_message | tostring | .[:300])" else null end)}' \
               > "rows/$leg.json"
