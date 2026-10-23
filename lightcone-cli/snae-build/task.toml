@@ -19,6 +19,9 @@ difficulty = "medium"
 # (a ~160-line CLI manual): it is what a user would type, so how to drive lc
 # and astra must come from the skills or the CLIs' own help — which is what
 # makes the skills-on vs skills-off comparison mean something.
+# One line beyond it says the run is unattended: an agent that stops to ask
+# a question ends the trial, and that is a fact about the harness, not a
+# hint about lc.
 source_format = "lightcone-cli-eval"
 source_commit = "cd7c5399c43d591998f4cee774865d4e93099899"
 
