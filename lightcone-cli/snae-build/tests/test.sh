@@ -6,6 +6,11 @@
 #   outputs_current   0.50  fraction of declared outputs `current` in lc status --json
 #   publication_ready 0.25  lc materialize --check is up to date with >=1 current
 #                           output, and ro-crate-metadata.json exists
+# Two facts about how the agent got there ride along unweighted, read from
+# the ATIF trajectory Harbor syncs to /logs/agent before verification, and
+# only when there is one (the oracle has none):
+#   agent_steps             trajectory steps the agent took
+#   skills_loaded           1 if the agent loaded a skill, else 0
 # Always exits 0; scoring problems are a 0.0, not a crash.
 set +e
 
@@ -67,7 +72,25 @@ fi
 
 read -r reward < <(python3 -c "print(f'{0.25*$spec_valid + 0.5*$outputs_current + 0.25*$publication_ready:.4f}')")
 printf '%s\n' "$reward" > "$LOGS/reward.txt"
-printf '{"reward": %s, "spec_valid": %s, "outputs_current": %s, "publication_ready": %s}\n' \
-  "$reward" "$spec_valid" "$outputs_current" "$publication_ready" > "$LOGS/reward.json"
+python3 - "$LOGS/reward.json" "${AGENT_LOGS_DIR:-/logs/agent}/trajectory.json" \
+  "$reward" "$spec_valid" "$outputs_current" "$publication_ready" <<'PY'
+import json, sys
+out, trajectory, *scores = sys.argv[1:]
+result = dict(zip(["reward", "spec_valid", "outputs_current", "publication_ready"],
+                  map(float, scores)))
+try:
+    steps = json.load(open(trajectory)).get("steps") or []
+except Exception:
+    steps = None
+if steps is not None:
+    calls = [c for s in steps for c in s.get("tool_calls") or []]
+    result["agent_steps"] = sum(1 for s in steps if s.get("source") == "agent")
+    # A harness's Skill tool, or reading a SKILL.md by hand (codex has no tool)
+    result["skills_loaded"] = int(any(
+        (c.get("function_name") or "").lower() == "skill"
+        or "SKILL.md" in json.dumps(c.get("arguments"))
+        for c in calls))
+open(out, "w").write(json.dumps(result) + "\n")
+PY
 cat "$LOGS/reward.json"
 exit 0
