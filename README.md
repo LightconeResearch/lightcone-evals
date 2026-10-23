@@ -32,11 +32,9 @@ caller. The header comment holds both callers.
 Per leg (one Harbor agent and model), the workflow pins the task image to the
 lightcone-cli commit, requires the oracle to score 1.0, and runs the agent with
 the skills installed through `--skill`. The report reads the verifier's
-`reward.json`, runs `harbor analyze` with the task's `rubric.toml`, compares the
-trace with the caller's latest main run of the same leg, and fails on a reward
-below 1.0, an errored trial, a failed oracle or analysis, a leg that loaded no
-skill when `require_skills` is set, or (off main) agent steps more than 25% and
-3 over the median of the caller's last main runs.
+`reward.json`, runs `harbor analyze` with the task's `rubric.toml`, and fails
+on a failed oracle, an errored trial, a reward below 1.0, a failed analysis, or
+a leg that loaded no skill when `require_skills` is set.
 
 A task the workflow runs keeps this contract:
 

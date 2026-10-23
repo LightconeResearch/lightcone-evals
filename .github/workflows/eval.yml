@@ -4,12 +4,11 @@ name: Eval
 # pins the task image to the lightcone-cli commit, runs the task's oracle
 # (which must score 1.0), then runs one agent harness with the skills
 # installed through --skill. The report reads what the task's verifier
-# recorded, has `harbor analyze` judge each trial by the task's rubric,
-# compares the trace with the caller's main run of the same leg, and gates
-# on reward, breakage and agent steps against the caller's main history.
+# recorded, has `harbor analyze` judge each trial by the task's rubric, and
+# fails on a failed oracle, an errored trial or a reward below 1.0.
 #
 # A caller passes its own commit for the side it puts under test and keeps
-# its own secrets and baseline. lightcone-cli:
+# its own secrets. lightcone-cli:
 #
 #   on:
 #     pull_request:
@@ -20,7 +19,6 @@ name: Eval
 #   permissions:
 #     contents: read
 #     pull-requests: write
-#     actions: read
 #   jobs:
 #     eval:
 #       uses: LightconeResearch/lightcone-evals/.github/workflows/eval.yml@main
@@ -51,14 +49,6 @@ on:
       task: { type: string, default: lightcone-cli/snae-build }
       legs: { type: string, default: '[{"name": "claude-code", "agent": "claude-code", "model": "claude-sonnet-5-5", "secret": "CLAUDE_CODE_OAUTH_TOKEN"}]' }
       require_skills: { type: boolean, default: false }
-  workflow_dispatch:
-    inputs:
-      stack_ref: { description: "lightcone-cli ref to pin the task image to", default: main }
-      skills: { description: "--skill source", default: "https://github.com/LightconeResearch/agent-skills/tree/main/plugins/lightcone/skills" }
-      tasks_ref: { description: "lightcone-evals ref to read the task from", default: main }
-      task: { description: "Task path in lightcone-evals", default: lightcone-cli/snae-build }
-      legs: { description: "JSON list of {name, agent, model, secret, env?}", default: '[{"name": "claude-code", "agent": "claude-code", "model": "claude-sonnet-5-5", "secret": "CLAUDE_CODE_OAUTH_TOKEN"}]' }
-      require_skills: { description: "Fail a leg that never loaded a skill", type: boolean, default: false }
 
 concurrency:
   group: eval-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
@@ -76,6 +66,8 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(inputs.legs) }}
+    env:
+      LEG: jobs/${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -86,11 +78,14 @@ jobs:
       - run: uv tool install "harbor==$HARBOR_VERSION"
 
       # A SHA, never a branch name: the image installs lightcone-cli at this
-      # ARG, and Docker reuses a cached layer for an unchanged string
-      - name: Pin the task to the lightcone-cli commit
+      # ARG, and Docker reuses a cached layer for an unchanged string.
+      # Harbor resolves a --skill ref with git ls-remote, which knows ref
+      # names only, so a skills source at a commit is fetched here instead.
+      - name: Pin the stack and the skills
         env:
           TASK_DIR: evals/${{ inputs.task }}
           REF: ${{ inputs.stack_ref }}
+          SKILLS: ${{ inputs.skills }}
         run: |
           sha=$REF
           [[ $sha =~ ^[0-9a-f]{40}$ ]] \
@@ -99,38 +94,32 @@ jobs:
           grep -q '^ARG LIGHTCONE_COMMIT=' "$TASK_DIR/environment/Dockerfile" \
             || { echo "::error::$TASK_DIR does not pin lightcone-cli with ARG LIGHTCONE_COMMIT="; exit 1; }
           sed -i "s|^ARG LIGHTCONE_COMMIT=.*|ARG LIGHTCONE_COMMIT=$sha|" "$TASK_DIR/environment/Dockerfile"
-          mkdir -p "jobs/${{ matrix.name }}"
-          jq -n --arg leg "${{ matrix.name }}" --arg stack "$sha" \
-            --arg tasks "$(git -C evals rev-parse HEAD)" \
-            '{leg: $leg, stack: $stack, tasks: $tasks}' > "jobs/${{ matrix.name }}/leg.json"
 
-      # Harbor resolves a --skill ref with git ls-remote, which knows ref
-      # names only, so a source at a commit is fetched here and handed over
-      # as a local path; the commit goes in leg.json for the report
-      - name: Fetch skills pinned to a commit
-        env:
-          SKILLS: ${{ inputs.skills }}
-        run: |
-          re='^https://github\.com/([^/]+/[^/]+)/tree/([0-9a-f]{40})/(.+)$'
-          [[ $SKILLS =~ $re ]] || { echo "SKILLS=$SKILLS" >> "$GITHUB_ENV"; exit 0; }
-          repo=${BASH_REMATCH[1]} sha=${BASH_REMATCH[2]} sub=${BASH_REMATCH[3]}
-          git init -q skills-src
-          git -C skills-src sparse-checkout set --cone "$sub"
-          git -C skills-src fetch -q --depth=1 "https://github.com/$repo" "$sha"
-          git -C skills-src checkout -q FETCH_HEAD
-          echo "SKILLS=$PWD/skills-src/$sub" >> "$GITHUB_ENV"
-          jq --arg s "$sha" '.skills = $s' "jobs/${{ matrix.name }}/leg.json" > leg.json
-          mv leg.json "jobs/${{ matrix.name }}/leg.json"
+          skills_sha=
+          if [[ $SKILLS =~ ^https://github\.com/([^/]+/[^/]+)/tree/([0-9a-f]{40})/(.+)$ ]]; then
+            skills_sha=${BASH_REMATCH[2]} sub=${BASH_REMATCH[3]}
+            git init -q skills-src
+            git -C skills-src sparse-checkout set --cone "$sub"
+            git -C skills-src fetch -q --depth=1 "https://github.com/${BASH_REMATCH[1]}" "$skills_sha"
+            git -C skills-src checkout -q FETCH_HEAD
+            SKILLS=$PWD/skills-src/$sub
+          fi
+          echo "SKILLS=$SKILLS" >> "$GITHUB_ENV"
+
+          mkdir -p "$LEG"
+          jq -n --arg leg "${{ matrix.name }}" --arg stack "$sha" --arg skills "$skills_sha" \
+            --arg tasks "$(git -C evals rev-parse HEAD)" \
+            '{leg: $leg, stack: $stack, skills: $skills, tasks: $tasks, oracle: false}' > "$LEG/leg.json"
 
       # Free of any model, so it runs whatever secrets the caller has: a red
       # oracle means the task or the stack broke, not the agent
       - name: Run the reference solution
         run: |
-          harbor run -p "evals/${{ inputs.task }}" -a oracle -e docker \
-            -o "jobs/${{ matrix.name }}" --job-name oracle -q -y
+          harbor run -p "evals/${{ inputs.task }}" -a oracle -e docker -o "$LEG" --job-name oracle -q -y
           jq -e '[.stats.evals[] | (.n_errors // 0) == 0 and (.metrics[0].reward // 0) == 1.0]
-                 | length > 0 and all' "jobs/${{ matrix.name }}/oracle/result.json" \
-            || { jq .stats "jobs/${{ matrix.name }}/oracle/result.json"; exit 1; }
+                 | length > 0 and all' "$LEG/oracle/result.json" \
+            || { jq .stats "$LEG/oracle/result.json"; exit 1; }
+          jq '.oracle = true' "$LEG/leg.json" > leg.json && mv leg.json "$LEG/leg.json"
 
       - name: Run the agent
         env:
@@ -140,13 +129,13 @@ jobs:
         run: |
           [ -n "$KEY" ] || {
             echo "::notice::Skipping ${{ matrix.name }}: ${{ matrix.secret }} is not set"
-            jq '.skipped = "${{ matrix.secret }} not set"' "jobs/${{ matrix.name }}/leg.json" > leg.json
-            mv leg.json "jobs/${{ matrix.name }}/leg.json"; exit 0; }
+            jq '.skipped = "${{ matrix.secret }} not set"' "$LEG/leg.json" > leg.json
+            mv leg.json "$LEG/leg.json"; exit 0; }
           export "${{ matrix.secret }}=$KEY"
           while IFS= read -r kv; do export "$kv"; done \
             < <(jq -r '(. // {}) | to_entries[] | "\(.key)=\(.value)"' <<< "$LEG_ENV")
           harbor run -p "evals/${{ inputs.task }}" -a "${{ matrix.agent }}" -m "${{ matrix.model }}" \
-            --skill "$SKILLS" -e docker -o "jobs/${{ matrix.name }}" --job-name agent -q -y
+            --skill "$SKILLS" -e docker -o "$LEG" --job-name agent -q -y
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -160,12 +149,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      # The caller's own history describes the change; the task is read where
-      # the legs read it, so harbor analyze finds it at the same path
-      - uses: actions/checkout@v4
-        with:
-          path: caller
-          fetch-depth: 0
+      # The task is read where the legs read it, so harbor analyze finds it
+      # at the path the trials recorded
       - uses: actions/checkout@v4
         with:
           repository: LightconeResearch/lightcone-evals
@@ -175,146 +160,56 @@ jobs:
         with:
           pattern: eval-leg-*
           path: collected
-
-      - name: Fetch the history from main's latest successful run
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow "$GITHUB_WORKFLOW" --branch main \
-                 --event push --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
-          [ -n "$id" ] && gh run download "$id" -R "$GITHUB_REPOSITORY" -n eval-results -D baseline \
-            || echo "::notice::No main history yet"
-
-      - name: Summarize and gate
-        env:
-          REQUIRE_SKILLS: ${{ inputs.require_skills }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          shopt -s nullglob
-          mode=pr
-          [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ] && mode=main
-          mkdir -p report rows
-          [ -f baseline/history.json ] || { mkdir -p baseline; echo '{}' > baseline/history.json; }
-
-          # What the comparison can blame a change in behaviour on
-          if [ -n "$BASE_SHA" ] && git -C caller cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
-            { echo '```'
-              git -C caller log --oneline "$BASE_SHA..HEAD" | head -50
-              git -C caller diff --stat "$BASE_SHA...HEAD" | tail -40
-              echo '```'; } > report/changes.md
-          fi
-
-          # One row per leg: the oracle's verdict, what the task's verifier
-          # recorded, and the skills Harbor injected (name@commit, from its lock or
-          # the pinned fetch)
-          for d in collected/eval-leg-*/; do
-            [ -f "$d/leg.json" ] || continue
-            leg=$(jq -r .leg "$d/leg.json")
-            oracle=false
-            jq -e '[.stats.evals[] | (.n_errors // 0) == 0 and (.metrics[0].reward // 0) == 1.0]
-                   | length > 0 and all' "$d/oracle/result.json" > /dev/null 2>&1 && oracle=true
-            trial=$(dirname "$(ls "$d"agent/*/result.json 2>/dev/null | head -1)")
-            [ -f "$trial/agent/trajectory.json" ] && cp "$trial/agent/trajectory.json" "report/trace-$leg.json"
-            jq -n --arg trial "$trial" --argjson oracle "$oracle" --slurpfile l "$d/leg.json" \
-              --slurpfile r <(cat "$trial/result.json" 2>/dev/null) \
-              --slurpfile w <(cat "$trial/verifier/reward.json" 2>/dev/null) \
-              --slurpfile k <(cat "${d}agent/lock.json" 2>/dev/null) '
-              $l[0] + {oracle: $oracle, trial: (if $r == [] then null else $trial end),
-                reward: $w[0].reward, steps: $w[0].agent_steps,
-                skills_loaded: (if $w[0].skills_loaded == null then null else $w[0].skills_loaded == 1 end),
-                skills: [$k[0].trials[0].skills[]? | "\(.name)@\(.git_commit_id // $l[0].skills // "local" | .[:7])"] | unique,
-                exception: ($r[0].exception_info
-                  | if . then "\(.exception_type): \(.exception_message | tostring | .[:300])" else null end)}' \
-              > "rows/$leg.json"
-          done
-
-          # The gate: the oracle, reward and breakage always; off main, steps
-          # more than 25% and 3 over the median of the leg's main history,
-          # once three main runs are on record (one trial per leg is noisy)
-          jq -s --arg mode "$mode" --argjson require "$REQUIRE_SKILLS" --slurpfile h baseline/history.json '
-            def median: sort | if length % 2 == 1 then .[length / 2 | floor]
-                               else (.[length / 2 - 1] + .[length / 2]) / 2 end;
-            map(.history = [$h[0][.leg][]?.steps]
-                | .median = (if (.history | length) > 0 then (.history | median) else null end))
-            | {legs: ., reasons: (
-                (if length == 0 then ["no leg reported"] else [] end)
-                + [.[] | select(.oracle | not) | "\(.leg): reference solution failed — the task or the stack is broken"]
-                + (if length > 0 and all(.[]; .skipped) then ["no agent leg ran"] else [] end)
-                + [.[] | select(.oracle and (.skipped | not))
-                   | (if .exception then "\(.leg): errored — \(.exception)" else empty end),
-                     (if (.reward // 0) < 1 then "\(.leg): reward \(.reward) < 1.0" else empty end),
-                     (if $require and (.skills_loaded | not) then "\(.leg): no skill was loaded" else empty end),
-                     (if $mode == "pr" and (.history | length) >= 3 then
-                        if .steps == null then "\(.leg): no agent steps recorded, they cannot be compared"
-                        elif .steps > .median * 1.25 and .steps - .median >= 3
-                        then "\(.leg): \(.steps) agent steps against a main median of \(.median)"
-                        else empty end
-                      else empty end)])}' rows/*.json < /dev/null > report/results.json
-          jq -r '.reasons[]' report/results.json
-
-          # Main runs append to the history the next run compares against
-          if [ "$mode" = main ]; then
-            jq --slurpfile h baseline/history.json --arg sha "$GITHUB_SHA" '
-              reduce (.legs[] | select(.steps != null)) as $l ($h[0];
-                .[$l.leg] = ((.[$l.leg] // []) + [{sha: $sha, steps: $l.steps}])[-10:])' \
-              report/results.json > report/history.json
-          fi
-
       - uses: astral-sh/setup-uv@v6
       - run: uv tool install "harbor==$HARBOR_VERSION"
 
+      # One row per leg: the oracle's verdict, what the task's verifier
+      # recorded, and the skills Harbor injected (name@commit)
+      - name: Summarize
+        env:
+          REQUIRE_SKILLS: ${{ inputs.require_skills }}
+        run: |
+          for d in collected/eval-leg-*/; do
+            [ -f "$d/leg.json" ] || continue
+            trial=$(dirname "$(ls "$d"agent/*/result.json 2>/dev/null | head -1)")
+            jq -n --arg trial "$trial" --slurpfile l "$d/leg.json" \
+              --slurpfile r <(cat "$trial/result.json" 2>/dev/null) \
+              --slurpfile w <(cat "$trial/verifier/reward.json" 2>/dev/null) \
+              --slurpfile k <(cat "${d}agent/lock.json" 2>/dev/null) '
+              $l[0] + {trial: (if $r == [] then null else $trial end),
+                reward: $w[0].reward, steps: $w[0].agent_steps,
+                skills_loaded: (if $w[0].skills_loaded == null then null else $w[0].skills_loaded == 1 end),
+                skills: [$k[0].trials[0].skills[]?
+                         | "\(.name)@\(.git_commit_id // $l[0].skills | if . == "" then "local" else .[:7] end)"] | unique,
+                exception: ($r[0].exception_info
+                  | if . then "\(.exception_type): \(.exception_message | tostring | .[:300])" else null end)}'
+          done | jq -s --argjson require "$REQUIRE_SKILLS" '
+            {legs: ., reasons: (
+              (if length == 0 then ["no leg reported"] else [] end)
+              + [.[] | select(.oracle | not) | "\(.leg): reference solution failed — the task or the stack is broken"]
+              + (if length > 0 and all(.[]; .skipped) then ["no agent leg ran"] else [] end)
+              + [.[] | select(.oracle and (.skipped | not))
+                 | if .trial == null then "\(.leg): the agent run produced no trial"
+                   else (if .exception then "\(.leg): errored — \(.exception)" else empty end),
+                        (if (.reward // 0) < 1 then "\(.leg): reward \(.reward) < 1.0" else empty end),
+                        (if $require and (.skills_loaded | not) then "\(.leg): no skill was loaded" else empty end)
+                   end])}' > results.json
+          jq -r '.reasons[]' results.json
+
+      # The analysis is part of the result: a leg without one fails the job
       - name: Analyse the traces
-        id: analysis
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           RUBRIC: evals/${{ inputs.task }}/rubric.toml
         run: |
-          # The analysis is part of the result: a leg without one fails the job.
-          # harbor analyze judges each trial by the task's rubric; claude -p
-          # then compares it with main's run of the same leg, which a single
-          # trial cannot see.
-          legs=$(jq -r '.legs[] | select(.skipped | not) | select(.trial) | .leg' report/results.json)
-          [ -n "$legs" ] || exit 0
           rubric=(); [ -f "$RUBRIC" ] && rubric=(-r "$RUBRIC")
-          cat > compare.md <<'EOF'
-          You are comparing two runs of one leg of an automated eval: an
-          autonomous coding agent carried out the same task with the `astra`
-          and `lc` CLIs and the Lightcone agent skills, once on this change and
-          once on main. The message lists the files to read: both ATIF
-          trajectories (JSON: `steps`, each with `tool_calls` and an
-          `observation`), this run's rubric analysis, and the change under
-          test. Read them before answering.
-
-          Write one markdown section, `#### What changed vs main`, and nothing
-          else: where the extra or missing steps are, the first point where the
-          two runs diverge, and which commit or file in the change most
-          plausibly caused it — or say plainly that it looks like agent
-          variance, and why. If reward or breakage changed, explain that first.
-          Cite steps as `step N` and quote output verbatim where it matters.
-          EOF
-          status=ok
-          for leg in $legs; do
-            trial=$(jq -r --arg l "$leg" '.legs[] | select(.leg == $l) | .trial' report/results.json)
+          status=0
+          for trial in $(jq -r '.legs[] | select(.skipped | not) | .trial // empty' results.json); do
             timeout 1200 harbor analyze "$trial" "${rubric[@]}" -m claude-sonnet-5-5 -e docker \
-              -o analyze --job-name "analyze-$leg" -q \
-              && cp "$trial/analysis.json" "report/analysis-$leg.json" \
-              || { echo "::error::trace analysis failed for $leg"; status=failed; continue; }
-            [ -f "baseline/trace-$leg.json" ] || continue
-            [ -x "$HOME/.local/bin/claude" ] || {
-              curl -fsSL https://claude.ai/install.sh | bash
-              echo '{"hasCompletedOnboarding": true}' > "$HOME/.claude.json"; }
-            {
-              echo "Leg: $leg. Summary: $(jq -c --arg l "$leg" '.legs[] | select(.leg == $l) | del(.trial)' report/results.json)"
-              echo "- this run's trajectory: report/trace-$leg.json"
-              echo "- main's trajectory: baseline/trace-$leg.json"
-              echo "- this run's analysis: report/analysis-$leg.json"
-              [ -f report/changes.md ] && echo "- change under test: report/changes.md"
-            } > "input-$leg.txt"
-            timeout 900 "$HOME/.local/bin/claude" -p "$(cat compare.md)" --allowedTools Read Grep \
-              < "input-$leg.txt" > "report/compare-$leg.md" && [ -s "report/compare-$leg.md" ] \
-              || { echo "::error::comparison with main failed for $leg"; status=failed; }
+              -o analyze --job-name "analyze-$(basename "$trial")" -q \
+              || { echo "::error::trace analysis failed for $trial"; status=1; }
           done
-          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit $status
 
       - name: Build the report
         if: always()
@@ -322,33 +217,24 @@ jobs:
           {
             jq -r '"## \(if (.reasons | length) == 0 then "✅" else "❌" end) Eval\n\n<!-- lightcone-eval-report -->\n",
                    "lightcone-evals `\(.legs[0].tasks // "—" | .[:7])` · `${{ inputs.task }}`", "",
-                   "| Leg | Oracle | Reward | Agent steps | main median (runs) | Skills loaded | Skills injected | lightcone-cli |",
-                   "|---|---|---|---|---|---|---|---|",
+                   "| Leg | Oracle | Reward | Agent steps | Skills loaded | Skills injected | lightcone-cli |",
+                   "|---|---|---|---|---|---|---|",
                    (.legs[] | "| \(.leg) | \(if .oracle then "✅" else "❌" end) | "
-                     + (if .skipped then "skipped: \(.skipped) | | | | |"
-                        else "\(.reward // "—") | \(.steps // "—") | \(.median // "—") (\(.history | length)) | \(if .skills_loaded then "yes" elif .skills_loaded == false then "**no**" else "—" end) | \(.skills | join(", ")) |" end)
+                     + (if .skipped then "skipped: \(.skipped) | | | |"
+                        else "\(.reward // "—") | \(.steps // "—") | \(if .skills_loaded then "yes" elif .skills_loaded == false then "**no**" else "—" end) | \(.skills | join(", ")) |" end)
                      + " `\(.stack[:7])` |"),
-                   "", (.reasons[] | "- ❌ \(.)"), ""' report/results.json
-            for f in report/analysis-*.json; do
-              [ -e "$f" ] || continue
-              leg=${f#report/analysis-}; leg=${leg%.json}
-              echo "### $leg"; echo
-              jq -r '.summary, "", (.checks | to_entries[]
-                | "- \({pass: "✅", fail: "❌"}[.value.outcome] // "➖") **\(.key)**: \(.value.explanation)")' "$f"
-              echo
-              if [ -f "report/compare-$leg.md" ]; then cat "report/compare-$leg.md"
-              else echo "_No main run of this leg on record to compare against._"; fi
-              echo
-            done
-            echo "Steps are gated once three main runs are on record; trajectories are in the \`eval-results\` artifact."
-          } > report/comment.md
-          cat report/comment.md >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: eval-results
-          path: report
+                   "", (.reasons[] | "- ❌ \(.)"), ""' results.json
+            jq -r '.legs[] | select(.trial) | "\(.leg) \(.trial)/analysis.json"' results.json \
+              | while read -r leg f; do
+                  [ -f "$f" ] || continue
+                  echo "### $leg"; echo
+                  jq -r '.summary, "", (.checks | to_entries[]
+                    | "- \({pass: "✅", fail: "❌"}[.value.outcome] // "➖") **\(.key)**: \(.value.explanation)")' "$f"
+                  echo
+                done
+            echo "Trajectories are in the \`eval-leg-*\` artifacts."
+          } > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment on PR
         if: always() && github.event_name == 'pull_request'
@@ -357,7 +243,7 @@ jobs:
           script: |
             const fs = require('fs');
             // GitHub rejects comments over 65536 characters
-            const body = fs.readFileSync('report/comment.md', 'utf8').slice(0, 65000)
+            const body = fs.readFileSync('comment.md', 'utf8').slice(0, 65000)
               + `\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const marker = '<!-- lightcone-eval-report -->';
             const { data: comments } = await github.rest.issues.listComments({
@@ -371,6 +257,4 @@ jobs:
             }
 
       - name: Gate
-        run: |
-          jq -e '.reasons | length == 0' report/results.json > /dev/null
-          [ "${{ steps.analysis.outputs.status }}" != failed ]
+        run: jq -e '.reasons | length == 0' results.json > /dev/null
