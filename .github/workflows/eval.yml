@@ -69,12 +69,16 @@ jobs:
     env:
       LEG: jobs/${{ matrix.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: LightconeResearch/lightcone-evals
           ref: ${{ inputs.tasks_ref }}
           path: evals
-      - uses: astral-sh/setup-uv@v6
+      # No uv project is checked out, so a cache would have no key to
+      # invalidate it, and the one install it would speed up takes seconds
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
       - run: uv tool install "harbor==$HARBOR_VERSION"
 
       # A SHA, never a branch name: the image installs lightcone-cli at this
@@ -137,11 +141,13 @@ jobs:
           harbor run -p "evals/${{ inputs.task }}" -a "${{ matrix.agent }}" -m "${{ matrix.model }}" \
             --skill "$SKILLS" -e docker -o "$LEG" --job-name agent -q -y
 
-      - uses: actions/upload-artifact@v4
+      # jobs/ holds only this leg's directory, so the artifact carries the
+      # directory itself and every download lays out as collected/<leg>/
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: eval-leg-${{ matrix.name }}
-          path: jobs/${{ matrix.name }}
+          path: jobs
 
   report:
     needs: legs
@@ -151,16 +157,19 @@ jobs:
     steps:
       # The task is read where the legs read it, so harbor analyze finds it
       # at the path the trials recorded
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: LightconeResearch/lightcone-evals
           ref: ${{ inputs.tasks_ref }}
           path: evals
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: eval-leg-*
           path: collected
-      - uses: astral-sh/setup-uv@v6
+          merge-multiple: true
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
       - run: uv tool install "harbor==$HARBOR_VERSION"
 
       # One row per leg: the oracle's verdict, what the task's verifier
@@ -169,7 +178,7 @@ jobs:
         env:
           REQUIRE_SKILLS: ${{ inputs.require_skills }}
         run: |
-          for d in collected/eval-leg-*/; do
+          for d in collected/*/; do
             [ -f "$d/leg.json" ] || continue
             trial=$(dirname "$(ls "$d"agent/*/result.json 2>/dev/null | head -1)")
             jq -n --arg trial "$trial" --slurpfile l "$d/leg.json" \
@@ -238,7 +247,7 @@ jobs:
 
       - name: Comment on PR
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
