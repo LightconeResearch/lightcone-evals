@@ -141,11 +141,13 @@ jobs:
           harbor run -p "evals/${{ inputs.task }}" -a "${{ matrix.agent }}" -m "${{ matrix.model }}" \
             --skill "$SKILLS" -e docker -o "$LEG" --job-name agent -q -y
 
+      # jobs/ holds only this leg's directory, so the artifact carries the
+      # directory itself and every download lays out as collected/<leg>/
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: eval-leg-${{ matrix.name }}
-          path: jobs/${{ matrix.name }}
+          path: jobs
 
   report:
     needs: legs
@@ -164,6 +166,7 @@ jobs:
         with:
           pattern: eval-leg-*
           path: collected
+          merge-multiple: true
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
@@ -175,7 +178,7 @@ jobs:
         env:
           REQUIRE_SKILLS: ${{ inputs.require_skills }}
         run: |
-          for d in collected/eval-leg-*/; do
+          for d in collected/*/; do
             [ -f "$d/leg.json" ] || continue
             trial=$(dirname "$(ls "$d"agent/*/result.json 2>/dev/null | head -1)")
             jq -n --arg trial "$trial" --slurpfile l "$d/leg.json" \
