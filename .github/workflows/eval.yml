@@ -1,0 +1,260 @@
+name: Eval
+
+# Agentic eval on Harbor, called by the repositories under test. Each leg
+# pins the task image to the lightcone-cli commit, runs the task's oracle
+# (which must score 1.0), then runs one agent harness with the skills
+# installed through --skill. The report reads what the task's verifier
+# recorded, has `harbor analyze` judge each trial by the task's rubric, and
+# fails on a failed oracle, an errored trial or a reward below 1.0.
+#
+# A caller passes its own commit for the side it puts under test and keeps
+# its own secrets. lightcone-cli:
+#
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, ready_for_review]
+#     push:
+#       branches: [main]
+#     workflow_dispatch:
+#   permissions:
+#     contents: read
+#     pull-requests: write
+#   jobs:
+#     eval:
+#       uses: LightconeResearch/lightcone-evals/.github/workflows/eval.yml@main
+#       secrets: inherit
+#       with:
+#         stack_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+#
+# agent-skills passes `skills` instead, pointing --skill at its own commit:
+#
+#         skills: https://github.com/LightconeResearch/agent-skills/tree/${{ github.event.pull_request.head.sha || github.sha }}/plugins/lightcone/skills
+#         require_skills: true
+#         legs: >-
+#           [{"name": "claude-code", "agent": "claude-code", "model": "claude-sonnet-5-5", "secret": "CLAUDE_CODE_OAUTH_TOKEN"},
+#            {"name": "codex", "agent": "codex", "model": "gpt-5.1-codex", "secret": "OPENAI_API_KEY"}]
+#
+# A leg is {name, agent, model, secret, env?}: `secret` names the caller
+# secret exported under its own name, `env` adds variables, and a leg whose
+# secret is missing is skipped. The analysis needs CLAUDE_CODE_OAUTH_TOKEN.
+# --skill installs SKILL.md bundles only; plugin installs and hooks are
+# agent-skills' e2e-hooks workflow's to test.
+
+on:
+  workflow_call:
+    inputs:
+      stack_ref: { type: string, default: main }
+      skills: { type: string, default: "https://github.com/LightconeResearch/agent-skills/tree/main/plugins/lightcone/skills" }
+      tasks_ref: { type: string, default: main }
+      task: { type: string, default: lightcone-cli/snae-build }
+      legs: { type: string, default: '[{"name": "claude-code", "agent": "claude-code", "model": "claude-sonnet-5-5", "secret": "CLAUDE_CODE_OAUTH_TOKEN"}]' }
+      require_skills: { type: boolean, default: false }
+
+concurrency:
+  group: eval-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  HARBOR_VERSION: 0.22.0
+
+jobs:
+  legs:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.legs) }}
+    env:
+      LEG: jobs/${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: LightconeResearch/lightcone-evals
+          ref: ${{ inputs.tasks_ref }}
+          path: evals
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install "harbor==$HARBOR_VERSION"
+
+      # A SHA, never a branch name: the image installs lightcone-cli at this
+      # ARG, and Docker reuses a cached layer for an unchanged string.
+      # Harbor resolves a --skill ref with git ls-remote, which knows ref
+      # names only, so a skills source at a commit is fetched here instead.
+      - name: Pin the stack and the skills
+        env:
+          TASK_DIR: evals/${{ inputs.task }}
+          REF: ${{ inputs.stack_ref }}
+          SKILLS: ${{ inputs.skills }}
+        run: |
+          sha=$REF
+          [[ $sha =~ ^[0-9a-f]{40}$ ]] \
+            || sha=$(git ls-remote https://github.com/LightconeResearch/lightcone-cli "$REF" | head -1 | cut -f1)
+          [ -n "$sha" ] || { echo "::error::lightcone-cli has no ref $REF"; exit 1; }
+          grep -q '^ARG LIGHTCONE_COMMIT=' "$TASK_DIR/environment/Dockerfile" \
+            || { echo "::error::$TASK_DIR does not pin lightcone-cli with ARG LIGHTCONE_COMMIT="; exit 1; }
+          sed -i "s|^ARG LIGHTCONE_COMMIT=.*|ARG LIGHTCONE_COMMIT=$sha|" "$TASK_DIR/environment/Dockerfile"
+
+          skills_sha=
+          if [[ $SKILLS =~ ^https://github\.com/([^/]+/[^/]+)/tree/([0-9a-f]{40})/(.+)$ ]]; then
+            skills_sha=${BASH_REMATCH[2]} sub=${BASH_REMATCH[3]}
+            git init -q skills-src
+            git -C skills-src sparse-checkout set --cone "$sub"
+            git -C skills-src fetch -q --depth=1 "https://github.com/${BASH_REMATCH[1]}" "$skills_sha"
+            git -C skills-src checkout -q FETCH_HEAD
+            SKILLS=$PWD/skills-src/$sub
+          fi
+          echo "SKILLS=$SKILLS" >> "$GITHUB_ENV"
+
+          mkdir -p "$LEG"
+          jq -n --arg leg "${{ matrix.name }}" --arg stack "$sha" --arg skills "$skills_sha" \
+            --arg tasks "$(git -C evals rev-parse HEAD)" \
+            '{leg: $leg, stack: $stack, skills: $skills, tasks: $tasks, oracle: false}' > "$LEG/leg.json"
+
+      # Free of any model, so it runs whatever secrets the caller has: a red
+      # oracle means the task or the stack broke, not the agent
+      - name: Run the reference solution
+        run: |
+          harbor run -p "evals/${{ inputs.task }}" -a oracle -e docker -o "$LEG" --job-name oracle -q -y
+          jq -e '[.stats.evals[] | (.n_errors // 0) == 0 and (.metrics[0].reward // 0) == 1.0]
+                 | length > 0 and all' "$LEG/oracle/result.json" \
+            || { jq .stats "$LEG/oracle/result.json"; exit 1; }
+          jq '.oracle = true' "$LEG/leg.json" > leg.json && mv leg.json "$LEG/leg.json"
+
+      - name: Run the agent
+        env:
+          KEY: ${{ secrets[matrix.secret] }}
+          LEG_ENV: ${{ toJSON(matrix.env) }}
+          CLAUDE_CODE_MAX_TURNS: "200"
+        run: |
+          [ -n "$KEY" ] || {
+            echo "::notice::Skipping ${{ matrix.name }}: ${{ matrix.secret }} is not set"
+            jq '.skipped = "${{ matrix.secret }} not set"' "$LEG/leg.json" > leg.json
+            mv leg.json "$LEG/leg.json"; exit 0; }
+          export "${{ matrix.secret }}=$KEY"
+          while IFS= read -r kv; do export "$kv"; done \
+            < <(jq -r '(. // {}) | to_entries[] | "\(.key)=\(.value)"' <<< "$LEG_ENV")
+          harbor run -p "evals/${{ inputs.task }}" -a "${{ matrix.agent }}" -m "${{ matrix.model }}" \
+            --skill "$SKILLS" -e docker -o "$LEG" --job-name agent -q -y
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-leg-${{ matrix.name }}
+          path: jobs/${{ matrix.name }}
+
+  report:
+    needs: legs
+    if: always() && needs.legs.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # The task is read where the legs read it, so harbor analyze finds it
+      # at the path the trials recorded
+      - uses: actions/checkout@v4
+        with:
+          repository: LightconeResearch/lightcone-evals
+          ref: ${{ inputs.tasks_ref }}
+          path: evals
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: eval-leg-*
+          path: collected
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install "harbor==$HARBOR_VERSION"
+
+      # One row per leg: the oracle's verdict, what the task's verifier
+      # recorded, and the skills Harbor injected (name@commit)
+      - name: Summarize
+        env:
+          REQUIRE_SKILLS: ${{ inputs.require_skills }}
+        run: |
+          for d in collected/eval-leg-*/; do
+            [ -f "$d/leg.json" ] || continue
+            trial=$(dirname "$(ls "$d"agent/*/result.json 2>/dev/null | head -1)")
+            jq -n --arg trial "$trial" --slurpfile l "$d/leg.json" \
+              --slurpfile r <(cat "$trial/result.json" 2>/dev/null) \
+              --slurpfile w <(cat "$trial/verifier/reward.json" 2>/dev/null) \
+              --slurpfile k <(cat "${d}agent/lock.json" 2>/dev/null) '
+              $l[0] + {trial: (if $r == [] then null else $trial end),
+                reward: $w[0].reward, steps: $w[0].agent_steps,
+                skills_loaded: (if $w[0].skills_loaded == null then null else $w[0].skills_loaded == 1 end),
+                skills: [$k[0].trials[0].skills[]?
+                         | "\(.name)@\(.git_commit_id // $l[0].skills | if . == "" then "local" else .[:7] end)"] | unique,
+                exception: ($r[0].exception_info
+                  | if . then "\(.exception_type): \(.exception_message | tostring | .[:300])" else null end)}'
+          done | jq -s --argjson require "$REQUIRE_SKILLS" '
+            {legs: ., reasons: (
+              (if length == 0 then ["no leg reported"] else [] end)
+              + [.[] | select(.oracle | not) | "\(.leg): reference solution failed — the task or the stack is broken"]
+              + (if length > 0 and all(.[]; .skipped) then ["no agent leg ran"] else [] end)
+              + [.[] | select(.oracle and (.skipped | not))
+                 | if .trial == null then "\(.leg): the agent run produced no trial"
+                   else (if .exception then "\(.leg): errored — \(.exception)" else empty end),
+                        (if (.reward // 0) < 1 then "\(.leg): reward \(.reward) < 1.0" else empty end),
+                        (if $require and (.skills_loaded | not) then "\(.leg): no skill was loaded" else empty end)
+                   end])}' > results.json
+          jq -r '.reasons[]' results.json
+
+      # The analysis is part of the result: a leg without one fails the job
+      - name: Analyse the traces
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          RUBRIC: evals/${{ inputs.task }}/rubric.toml
+        run: |
+          rubric=(); [ -f "$RUBRIC" ] && rubric=(-r "$RUBRIC")
+          status=0
+          for trial in $(jq -r '.legs[] | select(.skipped | not) | .trial // empty' results.json); do
+            timeout 1200 harbor analyze "$trial" "${rubric[@]}" -m claude-sonnet-5-5 -e docker \
+              -o analyze --job-name "analyze-$(basename "$trial")" -q \
+              || { echo "::error::trace analysis failed for $trial"; status=1; }
+          done
+          exit $status
+
+      - name: Build the report
+        if: always()
+        run: |
+          {
+            jq -r '"## \(if (.reasons | length) == 0 then "✅" else "❌" end) Eval\n\n<!-- lightcone-eval-report -->\n",
+                   "lightcone-evals `\(.legs[0].tasks // "—" | .[:7])` · `${{ inputs.task }}`", "",
+                   "| Leg | Oracle | Reward | Agent steps | Skills loaded | Skills injected | lightcone-cli |",
+                   "|---|---|---|---|---|---|---|",
+                   (.legs[] | "| \(.leg) | \(if .oracle then "✅" else "❌" end) | "
+                     + (if .skipped then "skipped: \(.skipped) | | | |"
+                        else "\(.reward // "—") | \(.steps // "—") | \(if .skills_loaded then "yes" elif .skills_loaded == false then "**no**" else "—" end) | \(.skills | join(", ")) |" end)
+                     + " `\(.stack[:7])` |"),
+                   "", (.reasons[] | "- ❌ \(.)"), ""' results.json
+            jq -r '.legs[] | select(.trial) | "\(.leg) \(.trial)/analysis.json"' results.json \
+              | while read -r leg f; do
+                  [ -f "$f" ] || continue
+                  echo "### $leg"; echo
+                  jq -r '.summary, "", (.checks | to_entries[]
+                    | "- \({pass: "✅", fail: "❌"}[.value.outcome] // "➖") **\(.key)**: \(.value.explanation)")' "$f"
+                  echo
+                done
+            echo "Trajectories are in the \`eval-leg-*\` artifacts."
+          } > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            // GitHub rejects comments over 65536 characters
+            const body = fs.readFileSync('comment.md', 'utf8').slice(0, 65000)
+              + `\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const marker = '<!-- lightcone-eval-report -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
+
+      - name: Gate
+        run: jq -e '.reasons | length == 0' results.json > /dev/null
