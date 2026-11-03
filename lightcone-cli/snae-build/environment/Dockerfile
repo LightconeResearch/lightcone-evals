@@ -24,6 +24,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m pip install --no-cache-dir uv==0.12.13 \
     && uv python install 3.12
 
+# Building lightcone-cli from a git checkout runs its front-end build
+# (`npm ci && npm run build`, hatch_build.py), so Node is present for the
+# install below and removed after it: the agent's environment stays as it was.
+COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:22-slim /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+
 # lc (whose entry points mirror the git-annex executables, so `git add` of
 # annexed files works) and astra, installed the way a user installs them —
 # `uv tool install` — but linked system-wide so every user sees the same
@@ -33,7 +40,8 @@ RUN UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
         "git+https://github.com/LightconeResearch/lightcone-cli.git@${LIGHTCONE_COMMIT}" \
     && UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
     uv tool install --python 3.12 \
-        "astra-tools==$(/opt/uv-tools/lightcone-cli/bin/python -c 'import importlib.metadata as m; print(m.version("astra-tools"))')"
+        "astra-tools==$(/opt/uv-tools/lightcone-cli/bin/python -c 'import importlib.metadata as m; print(m.version("astra-tools"))')" \
+    && rm -rf /usr/local/bin/node /usr/local/bin/npm /usr/local/lib/node_modules /root/.npm
 
 # A git identity for whoever commits (the agent is told to; the engine
 # commits every output), and root reading the agent-owned repo in the
